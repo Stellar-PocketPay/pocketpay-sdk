@@ -564,3 +564,18 @@ export {
   AMOUNT_DECIMALS,
   MAX_STROOPS,
 } from './amount';
+
+
+// ─── Balance display normalisation ──────────────────────────────────────────
+export {
+  normalizeBalanceDisplay,
+  formatBalanceDisplay,
+  formatBalanceAssetLabel,
+} from './balanceDisplay';
+export type {
+  BalanceDisplayStatus,
+  BalanceDisplayReason,
+  BalanceDisplayOptions,
+  BalanceDisplayInput,
+  NormalizedBalanceDisplay,
+} from './balanceDisplay';

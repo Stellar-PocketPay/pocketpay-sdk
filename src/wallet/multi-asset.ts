@@ -19,7 +19,13 @@ import {
   PocketPayResult,
 } from '../types';
 import { PocketPayError } from '../types';
-import { validatePublicKey, wrapError, toSuccessResult, toFailureResult } from '../utils';
+import {
+  validatePublicKey,
+  wrapError,
+  toSuccessResult,
+  toFailureResult,
+  formatBalanceDisplay,
+} from '../utils';
 import { getHorizonServer, resolveConfig } from '../config';
 import { withTimeout } from '../network';
 
@@ -119,7 +125,11 @@ export function parseMultiAssetBalance(
         state = 'unavailable';
       }
 
-      const formattedDisplay = `${availableNum.toFixed(2)} XLM`;
+      const formattedDisplay = formatBalanceDisplay(
+        availableBalance,
+        { type: 'native', code: 'XLM' },
+        { minimumFractionDigits: 2, maximumFractionDigits: 2, groupThousands: false },
+      );
 
       nativeItem = {
         type: 'native',
@@ -160,7 +170,11 @@ export function parseMultiAssetBalance(
       }
 
       const statusTag = !isAuthorized ? ' (Unauthorized)' : '';
-      const formattedDisplay = `${availableNum.toFixed(2)} ${assetCode}${statusTag}`;
+      const formattedDisplay = `${formatBalanceDisplay(
+        availableBalance,
+        { type: 'issued', code: assetCode, issuer },
+        { minimumFractionDigits: 2, maximumFractionDigits: 2, groupThousands: false },
+      )}${statusTag}`;
 
       issuedAssets.push({
         type: 'issued',
@@ -279,14 +293,29 @@ export function formatAssetBalanceDisplay(
   decimals: number = 2,
 ): string {
   if (item.type === 'native') {
-    const amount = parseFloat(item.availableBalance);
-    return `${amount.toFixed(decimals)} XLM`;
+    return formatBalanceDisplay(
+      item.availableBalance,
+      { type: 'native', code: 'XLM' },
+      {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+        groupThousands: false,
+      },
+    );
   }
 
   if (item.type === 'issued') {
-    const amount = parseFloat(item.availableBalance);
     const auth = !item.isAuthorized ? ' (Unauthorized)' : '';
-    return `${amount.toFixed(decimals)} ${item.assetCode}${auth}`;
+    const display = formatBalanceDisplay(
+      item.availableBalance,
+      { type: 'issued', code: item.assetCode, issuer: item.issuer },
+      {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+        groupThousands: false,
+      },
+    );
+    return `${display}${auth}`;
   }
 
   return `${item.totalBalance} ${item.assetCode} (Unknown)`;

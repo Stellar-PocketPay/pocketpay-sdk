@@ -515,6 +515,19 @@ export {
   formatAsset,
   parseAssetString,
   areAssetsEqual,
+  // Balance display normalisation (issue #447)
+  normalizeBalanceDisplay,
+  formatBalanceDisplay,
+  formatBalanceAssetLabel,
   // Security helpers
   redactSensitive,
+} from './utils';
+
+
+export type {
+  BalanceDisplayStatus,
+  BalanceDisplayReason,
+  BalanceDisplayOptions,
+  BalanceDisplayInput,
+  NormalizedBalanceDisplay,
 } from './utils';
