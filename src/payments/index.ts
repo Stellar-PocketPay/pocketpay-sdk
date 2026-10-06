@@ -6,7 +6,7 @@
 import * as StellarSDK from '@stellar/stellar-sdk';
 import { getHorizonServer, getNetworkPassphrase, resolveConfig } from '../config';
 import { SendXLMParams, SendAssetParams, PaymentResult, PocketPayError, SDKConfig, PocketPayResult, EnhancedPocketPayResult } from '../types';
-import { buildMemo, wrapError, toResult, toEnhancedSuccessResult, toEnhancedFailureResult, toEnhancedResult } from '../utils';
+import { buildMemo, wrapError, toResult, toEnhancedSuccessResult, toEnhancedFailureResult, toEnhancedResult, safeParseAmount } from '../utils';
 import type { ResultWarning, RecoveryHint } from '../errors';
 import { withTimeout } from '../network';
 import { submitWithGuard } from '../transactions/guarded-submit';
@@ -151,9 +151,16 @@ export async function enhancedSendXLM(
   try {
     const result = await sendXLM(params, config);
 
-    const feeNum = parseFloat(result.fee);
-    const amountNum = parseFloat(amount);
-    if (amountNum > 0 && feeNum / amountNum > 0.1) {
+    // `result.fee` is Horizon's fee_charged, a whole number of stroops, while
+    // `amount` is a decimal XLM string. Compare both in stroops, exactly:
+    // fee / amount > 10%  <=>  fee * 10 > amount. Non-throwing on purpose: the
+    // payment has already succeeded, so the warning must never turn it into a
+    // failure.
+    const feeCharged = String(result.fee);
+    const feeStroops = /^\d+$/.test(feeCharged) ? BigInt(feeCharged) : null;
+    const parsedAmount = safeParseAmount(amount);
+    const amountStroops = parsedAmount.valid ? parsedAmount.amount.stroops : 0n;
+    if (feeStroops !== null && amountStroops > 0n && feeStroops * 10n > amountStroops) {
       warnings.push({
         code: 'HIGH_FEE_RATIO',
         message: `Transaction fee (${result.fee} stroops) is more than 10% of the payment amount.`,
