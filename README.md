@@ -57,6 +57,7 @@ npm install @axionvera/pocketpay-sdk
 - [Acceptance Criteria Traceability](./docs/acceptance-criteria-traceability.md) - Format for mapping SDK changes to issue criteria in PRs
 - [Pre-submission Verification](./docs/pre-submission-verification.md) - Run `npm run presubmit` before submitting a PR (lint, tests, coverage, build)
 - [Contribution Quality Gate](./docs/contribution-quality-gate.md) - Maintainer checklist and examples of incomplete vs acceptable issue work before approval
+- [GrantFox PR Reviewer Checklist](./docs/grantfox-reviewer-checklist.md) - Reviewer workflow for issue linkage, meaningful implementation, tests/CI evidence, acceptance criteria, security, and PASS/HOLD decisions
 - [Getting Started](./docs/getting-started.md) - Step-by-step guide to install, create wallets, fund accounts, check balances, and send payments
 - [End-to-End App Integration Blueprint](./docs/app_integration_blueprint.md) - App-level flow combining config, diagnostics, wallet, account, payments, transactions, Soroban, vault, security, and typed error handling
 - [Testnet Account Funding](./docs/testnet-funding.md) - Funding and activating Testnet accounts with Friendbot, confirming activation, and common unfunded-account errors

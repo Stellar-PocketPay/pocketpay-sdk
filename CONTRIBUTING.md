@@ -230,6 +230,8 @@ The checkbox form lives at [`.github/checklists/contribution-quality-gate.md`](.
 
 Contributors should read that guide before opening a PR. Maintainers should not approve until the checklist passes. A merged PR is still **not** automatic payment approval.
 
+For GrantFox campaign work, maintainers should also use the dedicated [GrantFox PR Reviewer Checklist](./docs/grantfox-reviewer-checklist.md), which ties issue linkage, meaningful implementation, current-head tests/CI evidence, acceptance-criteria traceability, and security review into one PASS/HOLD workflow.
+
 ---
 
 ## Reporting Issues
