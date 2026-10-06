@@ -56,6 +56,7 @@ npm install @axionvera/pocketpay-sdk
 - [Pre-PR Verification](./docs/pre-pr-verification.md) - Run `npm run verify:pr` before opening a pull request to confirm tests, docs, CI, and issue acceptance criteria
 - [Acceptance Criteria Traceability](./docs/acceptance-criteria-traceability.md) - Format for mapping SDK changes to issue criteria in PRs
 - [Pre-submission Verification](./docs/pre-submission-verification.md) - Run `npm run presubmit` before submitting a PR (lint, tests, coverage, build)
+- [CI Pass Requirements](./docs/ci-pass-requirements.md) - Required CI status semantics, common failure types, local reproduction commands, contributor fixes, and reviewer handling of red or unavailable checks
 - [Contribution Quality Gate](./docs/contribution-quality-gate.md) - Maintainer checklist and examples of incomplete vs acceptable issue work before approval
 - [Getting Started](./docs/getting-started.md) - Step-by-step guide to install, create wallets, fund accounts, check balances, and send payments
 - [End-to-End App Integration Blueprint](./docs/app_integration_blueprint.md) - App-level flow combining config, diagnostics, wallet, account, payments, transactions, Soroban, vault, security, and typed error handling
