@@ -437,22 +437,151 @@ export function redactSensitive(str: string): string {
   return redacted;
 }
 
+/**
+ * Clone an error before exposing it as structured metadata.
+ *
+ * Error messages and stacks can contain request parameters supplied by a
+ * network client. Keep the useful error identity while dropping custom
+ * enumerable fields and redacting secret-shaped substrings.
+ */
+function sanitizeErrorCause(error: Error): Error {
+  const sanitized = new Error(redactSensitive(error.message));
+  sanitized.name = redactSensitive(error.name);
+  if (error.stack) sanitized.stack = redactSensitive(error.stack);
+  return sanitized;
+}
+
+/**
+ * A PocketPayError may be thrown by an SDK or downstream caller with unsafe
+ * message, cause, validation, or custom diagnostic metadata. Leave ordinary
+ * errors unchanged, but clone unsafe ones before exposing them from a safe
+ * result or an error wrapper. Cloning also drops unrecognized metadata.
+ */
+function sanitizePocketPayError(error: PocketPayError): PocketPayError {
+  const textFields = [
+    error.name,
+    error.message,
+    error.stack,
+    error.code,
+    error.category,
+    error.safeMessage,
+    error.transactionHash,
+    error.validation?.field,
+    error.validation?.reason,
+    error.validation?.value,
+    error.timeout?.operation,
+    error.timeout?.stage,
+    error.cause?.name,
+    error.cause?.message,
+    error.cause?.stack,
+  ];
+  const hasSecret = textFields.some(
+    (value) => typeof value === 'string' && redactSensitive(value) !== value,
+  );
+  const expected = new Set([
+    'name', 'message', 'stack', 'code', 'statusCode', 'cause',
+    'validation', 'transactionHash', 'retryable', 'category',
+    'safeMessage', 'timeout',
+  ]);
+  const extraErrorMetadata = Object.getOwnPropertyNames(error).some(
+    (key) => !expected.has(key),
+  ) || Object.getOwnPropertySymbols(error).length > 0;
+  const extraCauseMetadata = error.cause !== undefined && (
+    Object.getOwnPropertyNames(error.cause).some(
+      (key) => !['name', 'message', 'stack'].includes(key),
+    ) || Object.getOwnPropertySymbols(error.cause).length > 0
+  );
+  const extraValidationMetadata = error.validation !== undefined &&
+    Reflect.ownKeys(error.validation).some(
+      (key) => typeof key !== 'string' || !['field', 'reason', 'value'].includes(key),
+    );
+  const extraTimeoutMetadata = error.timeout !== undefined &&
+    typeof error.timeout === 'object' && error.timeout !== null &&
+    Reflect.ownKeys(error.timeout).some(
+      (key) => typeof key !== 'string' || !['stage', 'operation', 'timeoutMs'].includes(key),
+    );
+  // TypeScript annotations cannot constrain untrusted runtime objects.
+  // Values in nominally numeric/boolean fields can themselves carry secrets.
+  const invalidKnownMetadata =
+    (error.statusCode !== undefined &&
+      (typeof error.statusCode !== 'number' || !Number.isFinite(error.statusCode))) ||
+    (error.retryable !== undefined && typeof error.retryable !== 'boolean') ||
+    (error.timeout !== undefined &&
+      (typeof error.timeout !== 'object' || error.timeout === null ||
+        typeof error.timeout.operation !== 'string' ||
+        typeof error.timeout.timeoutMs !== 'number' ||
+        !Number.isFinite(error.timeout.timeoutMs)));
+  const invalidValidationValue = error.validation?.value !== undefined &&
+    typeof error.validation.value !== 'string' &&
+    typeof error.validation.value !== 'number';
+
+  if (!hasSecret && !extraErrorMetadata && !extraCauseMetadata &&
+      !extraValidationMetadata && !extraTimeoutMetadata && !invalidValidationValue &&
+      !invalidKnownMetadata) {
+    return error;
+  }
+
+  const validation = error.validation && {
+    field: redactSensitive(error.validation.field),
+    reason: redactSensitive(error.validation.reason),
+    value: typeof error.validation.value === 'string'
+      ? redactSensitive(error.validation.value)
+      : typeof error.validation.value === 'number'
+        ? error.validation.value
+        : undefined,
+  };
+  const safe = new PocketPayError(
+    redactSensitive(error.message),
+    redactSensitive(error.code),
+    {
+      statusCode: typeof error.statusCode === 'number' &&
+        Number.isFinite(error.statusCode) ? error.statusCode : undefined,
+      cause: error.cause ? sanitizeErrorCause(error.cause) : undefined,
+      validation,
+      category: error.category ? redactSensitive(error.category) : undefined,
+      safeMessage: error.safeMessage ? redactSensitive(error.safeMessage) : undefined,
+      timeout: error.timeout && typeof error.timeout === 'object' ? {
+        stage: ['preparation', 'submission', 'confirmation', 'unknown'].includes(
+          error.timeout.stage,
+        ) ? error.timeout.stage : 'unknown',
+        operation: typeof error.timeout.operation === 'string'
+          ? redactSensitive(error.timeout.operation) : 'unknown',
+        timeoutMs: typeof error.timeout.timeoutMs === 'number' &&
+          Number.isFinite(error.timeout.timeoutMs) ? error.timeout.timeoutMs : 0,
+      } : undefined,
+    },
+    error.transactionHash ? redactSensitive(error.transactionHash) : undefined,
+    typeof error.retryable === 'boolean' ? error.retryable : undefined,
+  );
+  safe.name = redactSensitive(error.name);
+  if (error.stack) safe.stack = redactSensitive(error.stack);
+  return safe;
+}
+
 export function wrapError(
   error: unknown,
   context: string,
   code: string
 ): PocketPayError {
-  if (error instanceof PocketPayError) return error;
+  if (error instanceof PocketPayError) return sanitizePocketPayError(error);
 
-  const message =
-    error instanceof Error ? error.message : String(error);
-  const cause = error instanceof Error ? error : undefined;
+  const cause = error instanceof Error ? sanitizeErrorCause(error) : undefined;
+  let message = cause?.message;
+  if (message === undefined) {
+    try {
+      message = redactSensitive(String(error));
+    } catch {
+      // Arbitrary thrown objects may have a throwing toString/ToPrimitive hook.
+      // Never let diagnostics escape the structured failure-result boundary.
+      message = 'Non-renderable thrown value';
+    }
+  }
 
   return new PocketPayError(
     `${context}: ${message}`,
     code,
     undefined,
-    cause
+    cause,
   );
 }
 
@@ -469,7 +598,7 @@ export function toSuccessResult<T>(value: T): SuccessResult<T> {
 }
 
 export function toFailureResult(error: PocketPayError): FailureResult {
-  return { ok: false, error };
+  return { ok: false, error: sanitizePocketPayError(error) };
 }
 
 export async function toResult<T>(
@@ -505,7 +634,7 @@ export function toEnhancedFailureResult(
   warnings?: ResultWarning[],
   recoveryHints?: RecoveryHint[],
 ): EnhancedFailureResult {
-  const result: EnhancedFailureResult = { ok: false, error };
+  const result: EnhancedFailureResult = { ok: false, error: sanitizePocketPayError(error) };
   if (warnings && warnings.length > 0) result.warnings = warnings;
   if (recoveryHints && recoveryHints.length > 0) result.recoveryHints = recoveryHints;
   return result;
