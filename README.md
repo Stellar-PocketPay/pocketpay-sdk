@@ -50,6 +50,7 @@ npm install @axionvera/pocketpay-sdk
 - [SDK Package Boundary & Dependency Direction Map](./docs/dependency_direction_map.md) - Which module may import which, security-sensitive boundaries, and correct vs. incorrect import examples
 - [SDK Roadmap](./docs/roadmap.md) - Directional plans and contributor opportunities across the SDK
 - [Testing](./docs/testing.md) - Unit vs integration test lanes and the offline guarantee
+- [Packaged Consumer Smoke](./docs/package-smoke.md) - Offline package-root exports, payment intent, wallet, config and error-contract gate (`npm run test:smoke`)
 - [Test Coverage Baseline](./docs/coverage-baseline.md) - Generate coverage reports and changed-module expectations (`npm run coverage:baseline`)
 - [SDK Module Test Matrix](./docs/module-test-matrix.md) - Required unit, fixture, error-path, and integration tests per major module
 - [Test-First Contribution Guide](./docs/test-first-guide.md) - Per-module test examples, happy/negative-path expectations, no-test justification rules, and local commands

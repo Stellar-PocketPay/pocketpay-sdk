@@ -61,8 +61,10 @@ guidance), see [Test Coverage Baseline](./coverage-baseline.md).
 | `npm run test:unit`            | Unit suite (explicit alias of `npm test`)     |
 | `npm run test:watch`           | Unit suite in watch mode                       |
 | `npm run test:integration`     | Integration suite (opt-in, needs the env flag)|
-| `npm run verify`               | Lint, circular-deps check, unit tests, coverage, and build |
+| `npm run verify`               | Lint, circular-deps, unit tests, coverage, build, consumer smoke |
 | `npm run presubmit`            | Pre-submission command (same checks + step banners / failure hints) |
+| `npm run test:smoke`           | Build and run packaged consumer smoke offline  |
+| `npm run smoke:consumer`       | Run consumer smoke after an existing build    |
 | `npm run test:coverage`        | Unit suite with V8 coverage report (`coverage/`) |
 | `npm run coverage:baseline`    | Coverage run + module baseline summary (see [coverage-baseline.md](./coverage-baseline.md)) |
 | `npm run verify:pr`            | Pre-PR script: automated checks + docs/CI/criteria reminders |

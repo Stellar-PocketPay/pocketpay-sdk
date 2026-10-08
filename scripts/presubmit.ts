@@ -68,6 +68,15 @@ const STEPS: CheckStep[] = [
     failureHint:
       'Resolve `tsc` emit errors (usually the same root cause as lint). Confirm `dist/` is produced.',
   },
+  {
+    id: 'smoke',
+    label: 'Packaged consumer smoke (offline)',
+    npmScript: 'smoke:consumer',
+    command: 'npm',
+    args: ['run', 'smoke:consumer'],
+    failureHint:
+      'Verify dist public exports and offline wallet, payment, config and error contracts. See docs/package-smoke.md.',
+  },
 ];
 
 function printHelp(): void {
@@ -79,7 +88,7 @@ Usage:
   npm run verify:presubmit
 
 Runs the same local CI-parity checks as \`npm run verify\`:
-  lint → check:circular → test → test:coverage → build
+  lint → check:circular → test → test:coverage → build → smoke:consumer
 
 Stops at the first failure and prints fix guidance.
 
@@ -106,7 +115,7 @@ function main(argv: string[]): number {
   console.log('PocketPay SDK — Pre-submission verification');
   console.log('==========================================');
   console.log('Run this before opening or updating a pull request.');
-  console.log('Pipeline: lint → circular → test → coverage → build\n');
+  console.log('Pipeline: lint → circular → test → coverage → build → smoke:consumer\n');
 
   for (let i = 0; i < STEPS.length; i++) {
     const step = STEPS[i]!;
