@@ -61,6 +61,8 @@ npm install @axionvera/pocketpay-sdk
 - [End-to-End App Integration Blueprint](./docs/app_integration_blueprint.md) - App-level flow combining config, diagnostics, wallet, account, payments, transactions, Soroban, vault, security, and typed error handling
 - [Testnet Account Funding](./docs/testnet-funding.md) - Funding and activating Testnet accounts with Friendbot, confirming activation, and common unfunded-account errors
 - [API Reference](./docs/api-reference.md) - Full reference with parameters, return types, and usage examples for every exported function
+- [Public API Governance](./docs/public-api-governance.md) - Supported root exports, compatibility classes, focused drift check, changelog policy, and reviewer workflow
+- [Public API Compatibility Checklist](./docs/PUBLIC_API_COMPATIBILITY_CHECKLIST.md) - PR checklist for intentional SDK surface changes
 - [React Native Compatibility](./docs/react-native.md) - Integration guide for Expo and bare React Native: polyfills, Metro config, secure storage, and known limitations
 - [Local Mobile Consumption](./docs/local-mobile-consumption.md) - Safely test unpublished SDK changes in `pocketpay-mobile`with tarballs, links, local paths, or workspaces
 - [Transaction Date Formatting](./docs/transaction-timestamps.md) - Format of every `createdAt` timestamp returned by the SDK

@@ -1,12 +1,51 @@
-# PocketPay SDK â€” Public API Compatibility Checklist
+# Public API Compatibility Checklist
 
-This checklist must be completed for any PR modifying poublicly exported functions, types, classes, or constants within the PocketPay SDK.
+Use this checklist for any pull request that changes exports, public types, public
+error codes, function signatures, configuration fields, or documented package
+behavior.
 
----
+The governing policy is [Public API Governance](./public-api-governance.md).
 
-## 1. Exported Functions & Types Review
+## 1. Scope the public surface
 
-- [ ]  *&Signature Stability:** Are function signatures, parameter orders, and return types preserved or
-  Strictly additive?
-- [ ]  *&Export Suficiency:** Are all new or
-  modified types/interfaces exported from the root `Šw^Ä¹ÑÍ€€¡…ÁÁÉ½ÁÉ¥…Ñ•±ä¤İ¥Ñ¡½ÕĞµÉ•…Í¥¹œ¥¹Ñ•É¹…±Ìü(´lt€€¨©9…µ¥¹œ½¹Ù•¹Ñ¥½¹Ìè¨¨¼¹•Ü•áÁ½ÉÑÌ½¹™½É´Ñ¼•á¥ÍÑ¥¹œM,¹…µ¥¹œÁ…ÑÑ•É¹Ì€¡”µœ´°A…Í…±…Í”™½ÈÑåÁ•Ì°…µ•±…Í”™½È™Õ¹Ñ¥½¹Ì¤ü((´´´((ŒŒ€È¸	É•…­¥¹œ¡…¹”Ù…±Õ…Ñ¥½¸((´lt€€¨™9½¸µ	É•…­¥¹œÕ…É…¹Ñ•”è¨¨½•ÌÑ¡¥Ì¡…¹”µ…¥¹Ñ…¥¸‰…­İ…É‘Ì½µÁ…Ñ¥‰¥±¥Ñäİ¥Ñ •á¥ÍÑ¥¹œÍ½µÍÕµ•ÉÌü(´lt€€¨™•ÁÉ•…Ñ¥½¸…±±‰…¬è¨¨%˜„‰É•…­¥¹œ¡…¹”¥ÌÕ¹…Ù½¥‘…‰±”°¥ÌÑ¡”½±A$µ…É­•…Ì‘•ÁÉ•…Ñ•‘İ¥Ñ „±•…È…±Ñ•É¹…Ñ¥Ù”ü(´lt€€¨©5…©½ÈY•ÉÍ¥½¸	…µÀè¨¨%ÌÑ¡¥Ì‰É•…­¥¹œ¡…¹”ÍÁ•¥™¥…±±ä™±…•™½È„€Í•µÙ•Èµ…©½ÈÙ•ÉÍ¥½¸É•±•…Í”ü((´´´((ŒŒ€Ì¸5¥É…Ñ¥½¸9½Ñ•Ì€˜½Õµ•¹Ñ…Ñ¥½¸((´lt€€¨©5¥É…Ñ¥½¸Õ¥‘”è¨¨É”ÍÑ•Àµ‰äµÍÑ•Àµ¥É…Ñ¥½¸¥¹ÍÑÉÕÑ¥½¹ÌÁÉ½Ù¥‘•™½È…¹ä‘•ÁÉ•…Ñ•½È…±Ñ•É•A$Á…ÑÑ•É¹Ìü(´lt€€¨©)M½Œ€¼QåÁ•½Œè¨¨É”…±°ÁÕ‰±¥ŒA$•¹‘Á½¥¹ÑÌ™Õ±±ä‘½Õµ•¹Ñ•İ¥Ñ ±•…È)½Œ½µµ•¹ÑÌ°Á…É…µ•Ñ•È‘•ÍÉ¥ÁÑ¥½¹Ì°…¹•á…µÁ±•Ìü((´´´((ŒŒ€Ğ¸Q•ÍÑÌ€˜á…µÁ±•ÌY•É¥™¥…Ñ¥½¸((´lt€€¨©%¹Ñ•É…Ñ¥½¸Q•ÍÑÌè¨¨É”Ñ¡•É”Ñ•ÍÑÌÙ•É¥™å¥¹œÑ¡…ĞÑ¡”9•Ü½UÁ‘…Ñ•A$İ½É­Ì…Ì•áÁ•Ñ•¥¸„É•…±¥ÍÑ¥ŒM,½¹ÍÕµÁÑ¥½¸Í•¹…É¥½¡”ü(´lt€€¨™á…µÁ±•Ì€˜•µ½Ìè¨¨É”…±°½‘”•á…µÁ±•Ì¥¸Ñ¡”É•…‘µ•€½È‘•µ¼…ÁÁÌÕÁ‘…Ñ•Ñ¼É•™±•ĞÑ¡”A$¡…¹•Ìü(
+- [ ] I checked whether the change affects anything imported from the package
+  root (`stellar-pocketpay-sdk`).
+- [ ] I did not add a supported deep-import path. Only the package root and
+  `./package.json` are exported by `package.json`.
+- [ ] New implementation helpers stay internal unless they are intentionally
+  added to the root API.
+
+## 2. Classify compatibility
+
+- [ ] The change is classified as **additive**, **deprecation**, or
+  **breaking**.
+- [ ] Existing function signatures, parameter meaning, return shapes, public
+  types, constants, and error-code semantics remain compatible unless this is
+  an intentional breaking change.
+- [ ] Any breaking change has an explicit migration path and release/versioning
+  plan.
+
+## 3. Run the focused export gate
+
+- [ ] `npm run check:public-api` passes.
+- [ ] New intended runtime exports are added to
+  `tests/exports.test.ts`'s required export set.
+- [ ] New intended public types are imported from the package root in the export
+  test so TypeScript compilation verifies that they remain public.
+- [ ] Internal helpers are not accidentally exposed from the package root.
+
+## 4. Documentation and examples
+
+- [ ] Public API documentation is updated for new or changed behavior.
+- [ ] Examples import from the package root rather than `src/*`, `dist/*`,
+  or another deep path.
+- [ ] Deprecations name the replacement API and expected removal window.
+- [ ] Known compatibility limitations are documented rather than hidden.
+
+## 5. Changelog and acceptance
+
+- [ ] `CHANGELOG.md` has an `[Unreleased]` entry for user-visible public API
+  changes.
+- [ ] The PR explains which issue acceptance criteria are satisfied.
+- [ ] Review notes call out compatibility risk explicitly when the change is not
+  purely additive.

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added readable public API export governance and compatibility checklist, plus `npm run check:public-api` as the focused root-export drift gate for contributors.
 - Opt-in SDK diagnostics (`src/diagnostics/`): redacted lifecycle hooks, `buildDiagnosticsReport`, and support guide (`docs/diagnostics.md`) for configuration, network, transaction, wallet, and vault observability without leaking secrets
 - Added a signer capability architecture on top of the account abstraction layer: `AccountAbstraction` is now the discriminated union `ReadOnlyAccount | SigningAccount`, with `canSignTransaction()` as an explicit type-guard capability check.
 - Added `ExternalSignerAdapter`, a typed extension point for future hardware/mobile/browser signers (contract only — no concrete adapter ships).
