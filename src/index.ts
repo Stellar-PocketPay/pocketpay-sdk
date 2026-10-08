@@ -397,6 +397,12 @@ export type {
   DiagnosticsEvent,
   DiagnosticsSensitiveKey,
   EndpointDiagnostics,
+  AccountDiagnosticsSnapshot,
+  PaymentReadinessSnapshot,
+  PaymentReadinessReason,
+  AccountDiagnosticsLookup,
+  BuildAccountDiagnosticsOptions,
+  AccountDiagnosticsReport,
 } from './diagnostics';
 
 export {
@@ -413,6 +419,7 @@ export {
   getDiagnosticsHooks,
   emitDiagnosticsEvent,
   buildDiagnosticsReport,
+  buildAccountDiagnosticsReport,
   probeConfiguredEndpoints,
 } from './diagnostics';
 

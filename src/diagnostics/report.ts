@@ -6,7 +6,10 @@ import { resolveConfig, getNetworkPassphrase, getFriendbotUrl } from '../config'
 import { SDK_CAPABILITIES, getCapability } from '../errors';
 import type { SDKConfig, ResolvedSDKConfig } from '../types';
 import { isDiagnosticsEnabled } from './hooks';
-import { redactDiagnosticsValue } from './redact';
+import {
+  DIAGNOSTICS_REDACTED_PLACEHOLDER,
+  redactDiagnosticsValue,
+} from './redact';
 import type {
   CapabilityDiagnosticsEntry,
   DiagnosticsReport,
@@ -21,13 +24,25 @@ import type {
 const SDK_NAME = 'stellar-pocketpay-sdk';
 const SDK_VERSION = '1.0.0';
 
+/** Return only the endpoint origin in shareable diagnostics. */
+function toSafeEndpointOrigin(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return parsed.origin === 'null'
+      ? DIAGNOSTICS_REDACTED_PLACEHOLDER
+      : parsed.origin;
+  } catch {
+    return DIAGNOSTICS_REDACTED_PLACEHOLDER;
+  }
+}
+
 function toSafeConfig(config: ResolvedSDKConfig): SafeConfigSnapshot {
   const configured =
     typeof config.contractId === 'string' && config.contractId.length > 0;
   return {
     network: config.network,
-    horizonUrl: config.horizonUrl,
-    sorobanRpcUrl: config.sorobanRpcUrl,
+    horizonUrl: toSafeEndpointOrigin(config.horizonUrl),
+    sorobanRpcUrl: toSafeEndpointOrigin(config.sorobanRpcUrl),
     timeoutMs: config.timeout ?? 30_000,
     contractIdConfigured: configured,
     ...(configured ? { contractId: config.contractId } : {}),
@@ -46,8 +61,8 @@ function toSafeNetwork(config: SDKConfig): SafeNetworkSnapshot {
 
   return {
     network: config.network,
-    horizonUrl: config.horizonUrl,
-    sorobanRpcUrl: config.sorobanRpcUrl,
+    horizonUrl: toSafeEndpointOrigin(config.horizonUrl),
+    sorobanRpcUrl: toSafeEndpointOrigin(config.sorobanRpcUrl),
     passphraseKnown,
     friendbotAvailable: config.network === 'testnet' && Boolean(getFriendbotUrl()),
   };

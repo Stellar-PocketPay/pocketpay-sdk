@@ -123,6 +123,8 @@ diagnostics APIs documented in [diagnostics.md](./diagnostics.md):
 
 - `buildDiagnosticsReport()` — shareable JSON snapshot (config, network,
   capabilities, vault readiness) with secrets redacted.
+- `buildAccountDiagnosticsReport(publicKey)` — the same snapshot plus public
+  account state and a payment-readiness verdict with reason codes.
 - `enableDiagnostics({ hooks })` — lifecycle events that never include secret
   keys, mnemonics, or signed XDR.
 

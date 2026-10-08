@@ -16,6 +16,12 @@ export type {
   DiagnosticsReport,
   DiagnosticsEvent,
   DiagnosticsSensitiveKey,
+  AccountDiagnosticsSnapshot,
+  PaymentReadinessSnapshot,
+  PaymentReadinessReason,
+  AccountDiagnosticsLookup,
+  BuildAccountDiagnosticsOptions,
+  AccountDiagnosticsReport,
 } from './types';
 
 export { DIAGNOSTICS_SENSITIVE_KEYS } from './types';
@@ -38,6 +44,7 @@ export {
 } from './hooks';
 
 export { buildDiagnosticsReport } from './report';
+export { buildAccountDiagnosticsReport } from './account';
 
 export { probeConfiguredEndpoints } from './probe';
 export type { EndpointDiagnostics } from './probe';

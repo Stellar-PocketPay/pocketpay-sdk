@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Opt-in SDK diagnostics (`src/diagnostics/`): redacted lifecycle hooks, `buildDiagnosticsReport`, and support guide (`docs/diagnostics.md`) for configuration, network, transaction, wallet, and vault observability without leaking secrets
+- `buildAccountDiagnosticsReport(publicKey, options?)`: a support-safe report of one account's public state (funded/unfunded/error, native balance, estimated minimum balance) with a payment-readiness verdict and reason codes. Invalid account ids and provider error messages are never echoed. See "Account diagnostics report" in `docs/diagnostics.md` (#444)
 - Added a signer capability architecture on top of the account abstraction layer: `AccountAbstraction` is now the discriminated union `ReadOnlyAccount | SigningAccount`, with `canSignTransaction()` as an explicit type-guard capability check.
 - Added `ExternalSignerAdapter`, a typed extension point for future hardware/mobile/browser signers (contract only — no concrete adapter ships).
 - Added `signWithAccount()`/`safeSignWithAccount()` to `src/transactions/offline-preparation.ts`, checking signer capability and signer/account match before signing an `AccountAbstraction`-held transaction.

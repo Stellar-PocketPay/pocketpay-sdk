@@ -101,6 +101,7 @@ diagnostics: [
 'isDiagnosticsEnabled',
 'emitDiagnosticsEvent',
 'buildDiagnosticsReport',
+'buildAccountDiagnosticsReport',
 'redactDiagnosticsValue',
 'probeConfiguredEndpoints',
 ],
