@@ -99,6 +99,54 @@ await Promise.all([
 Different accounts do not block each other, and a failing task does not cascade
 into the ones queued behind it — each caller sees only its own rejection.
 
+### End-to-end lifecycle safety
+
+`executeTransactionLifecycle(params, secretKey, options, config)` now uses
+the SDK's shared `defaultSequenceProvider.withSequence(params.sourcePublicKey, ...)`
+around its entire prepare/build/sign/guarded-submit sequence. Two concurrent
+calls within one process for the **same** account no longer build against the
+same pre-submit Horizon sequence; the next call waits until the previous
+submission/polling attempt completes, then re-reads network state. Calls for
+different accounts remain independent.
+
+This uses the already-shipped `SequenceProvider`, not a second lock or a
+sequence-number allocator. The guarded end-to-end API is exported from the
+package root, so application code can use it without importing private
+`src/transactions/orchestrator` internals:
+
+```ts
+import { executeTransactionLifecycle } from 'stellar-pocketpay-sdk';
+
+const outcome = await executeTransactionLifecycle(params, signerSecret);
+if (outcome.state === 'unresolved') {
+  // Poll the original transaction hash before starting another same-account intent.
+}
+```
+
+Standalone `bindAndBuild`, manually assembled transactions, and one-shot
+helpers still require callers to use a shared `SequenceProvider.withSequence`
+explicitly if they may race with other intents. Exporting the lifecycle entry
+point does not extend the sequence lock across processes or resolve unknown
+network outcomes automatically.
+
+**Horizon response identity is now authoritative.** The guarded lifecycle no
+longer calls a response `confirmed` merely because it contains some hash or
+because a local envelope hash can be computed. The returned hash must match
+the exact signed transaction, and `successful` must be an explicit boolean
+from Horizon. A matching `successful: false` is `rejected` and requires
+rebuilding; a missing, malformed, conflicting, or incomplete response is
+`unresolved` and requires status polling before any resubmission. A matching
+`successful: true` is the only confirmed success path. This guards against
+unrelated ledger records and unknown transaction status being presented to a
+confirmation UI as settled.
+
+**Unknown submission status is not a successful settlement.** When the lifecycle
+returns `state: 'unresolved'` / `actionRequired: 'poll'`, do not initiate another
+same-account intent until the previous transaction hash has been resolved
+against the ledger. The process-local queue serializes calls but cannot make
+an unresolved ledger outcome final. Cross-process and externally submitted
+transactions still need separate coordination.
+
 ### ⚠️ The guarantee is per process
 
 `withSequence` is backed by an in-memory promise chain. It coordinates intents

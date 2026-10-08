@@ -204,6 +204,7 @@ export type {
 
 // ─── Transaction lifecycle orchestrator (issue #305) ─────────────────────────
 export {
+  executeTransactionLifecycle,
   submitGuarded,
   reconcileSubmission,
   requiresStatusResolution,
