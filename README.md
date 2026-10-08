@@ -60,6 +60,7 @@ npm install @axionvera/pocketpay-sdk
 - [Getting Started](./docs/getting-started.md) - Step-by-step guide to install, create wallets, fund accounts, check balances, and send payments
 - [End-to-End App Integration Blueprint](./docs/app_integration_blueprint.md) - App-level flow combining config, diagnostics, wallet, account, payments, transactions, Soroban, vault, security, and typed error handling
 - [Testnet Account Funding](./docs/testnet-funding.md) - Funding and activating Testnet accounts with Friendbot, confirming activation, and common unfunded-account errors
+- [Testnet Account Diagnostics](./docs/testnet-account-diagnostics.md) - Read-only funded/unfunded/unavailable checks with deterministic offline lookup injection
 - [API Reference](./docs/api-reference.md) - Full reference with parameters, return types, and usage examples for every exported function
 - [React Native Compatibility](./docs/react-native.md) - Integration guide for Expo and bare React Native: polyfills, Metro config, secure storage, and known limitations
 - [Local Mobile Consumption](./docs/local-mobile-consumption.md) - Safely test unpublished SDK changes in `pocketpay-mobile`with tarballs, links, local paths, or workspaces

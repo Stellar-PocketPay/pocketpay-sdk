@@ -518,3 +518,15 @@ export {
   // Security helpers
   redactSensitive,
 } from './utils';
+
+// ─── Testnet account diagnostics (issue #336) ───────────────────────────────
+export { diagnoseTestnetAccount } from './account';
+export type {
+  TestnetAccountStatus,
+  TestnetAccountDiagnostic,
+  FundedTestnetAccountDiagnostic,
+  UnfundedTestnetAccountDiagnostic,
+  UnavailableTestnetAccountDiagnostic,
+  TestnetAccountLookup,
+  DiagnoseTestnetAccountOptions,
+} from './account';

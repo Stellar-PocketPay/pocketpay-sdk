@@ -62,3 +62,15 @@ export {
 } from './sequence';
 
 export type { SequenceSnapshot, SequenceProviderOptions } from './sequence';
+
+// ─── Testnet account diagnostics ─────────────────────────────────────────────
+export { diagnoseTestnetAccount } from './testnet';
+export type {
+  TestnetAccountStatus,
+  TestnetAccountDiagnostic,
+  FundedTestnetAccountDiagnostic,
+  UnfundedTestnetAccountDiagnostic,
+  UnavailableTestnetAccountDiagnostic,
+  TestnetAccountLookup,
+  DiagnoseTestnetAccountOptions,
+} from './testnet';
