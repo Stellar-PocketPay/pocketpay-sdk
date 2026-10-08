@@ -211,6 +211,16 @@ export {
 
 export type { GuardedSubmitOptions, SubmittableTransaction } from './transactions';
 
+// ─── Local transaction queue (issue #207) ────────────────────────────────────
+export { TransactionQueue, createTransactionQueue } from './transactions';
+export type {
+  TransactionQueueState,
+  TransactionQueueSnapshot,
+  TransactionQueueResult,
+  TransactionQueueEnqueueOptions,
+  TransactionQueueHandle,
+} from './transactions';
+
 export type {
   LifecycleStage,
   LifecycleState,

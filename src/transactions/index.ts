@@ -362,6 +362,16 @@ export {
 
 export type { GuardedSubmitOptions, SubmittableTransaction } from './orchestrator';
 
+// ─── Local transaction queue (issue #207) ────────────────────────────────────
+export { TransactionQueue, createTransactionQueue } from './queue';
+export type {
+  TransactionQueueState,
+  TransactionQueueSnapshot,
+  TransactionQueueResult,
+  TransactionQueueEnqueueOptions,
+  TransactionQueueHandle,
+} from './queue';
+
 // ─── Transaction build validation pipeline (issue #249) ──────────────────────
 export {
   validateTransactionBuild,
