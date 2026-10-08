@@ -111,6 +111,34 @@ const unsigned = buildUnsignedTransaction(updated);
 // unsigned.networkPassphrase - Network passphrase for signing
 ```
 
+#### Review Before Signing
+
+Before handing the transaction to any local, hardware, or remote signer, render a
+read-only review from the exact payload that will be approved:
+
+```typescript
+import { getTransactionSigningSummary } from '@stellar/pocketpay-sdk';
+
+const review = getTransactionSigningSummary(unsigned);
+
+console.log(review.source);
+console.log(review.networkName);
+console.log(review.feeInXlm);
+console.table(review.operations);
+console.log(review.memo);
+
+// This helper only reads the payload. It never signs or submits it.
+if (!review.canSign) {
+  throw new Error('Transaction is not ready for signing');
+}
+```
+
+The same helper also accepts a `PreparedTransaction`, which is useful for a
+preview before the final sequence-dependent build. For the final approval UI,
+prefer the `UnsignedTransaction` summary so the source, operations, memo, fee,
+network, time bounds, and transaction hash all describe the exact built payload
+that will be signed.
+
 #### Step 5: Sign Transaction
 
 ```typescript

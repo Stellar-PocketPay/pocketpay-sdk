@@ -272,6 +272,7 @@ export {
   safeSignWithAccount,
   safeSubmitSignedTransaction,
   safePrepareAndSignTransaction,
+  getTransactionSigningSummary,
 } from './transactions';
 export type {
   OfflinePaymentOperation,
@@ -281,6 +282,7 @@ export type {
   UnsignedTransaction,
   SignedTransaction,
   SubmissionResult,
+  TransactionSigningSummary,
 } from './transactions';
 
 // ─── Soroban Vault ──────────────────────────────────────────────────────────
