@@ -22,6 +22,7 @@ export type ConfigSource = 'override' | 'env' | 'default';
 /** Safe configuration source metadata representing origin of each setting. */
 export interface ConfigSourceMetadata {
   network: ConfigSource;
+  networkPassphrase: ConfigSource;
   horizonUrl: ConfigSource;
   sorobanRpcUrl: ConfigSource;
   timeout: ConfigSource;
@@ -45,6 +46,8 @@ export type FeatureFlagsConfig = Record<string, boolean>;
 export interface SDKConfig {
   /** Network to connect to (default: "testnet") */
   network: StellarNetwork;
+  /** Stellar network identifier for the selected network (auto-resolved if omitted) */
+  networkPassphrase?: string;
   /** Horizon server URL (auto-resolved if omitted) */
   horizonUrl: string;
   /** Soroban RPC URL (auto-resolved if omitted) */
@@ -60,6 +63,7 @@ export interface SDKConfig {
 /** Fully resolved SDK configuration including feature flags and safe config source metadata. */
 export interface ResolvedSDKConfig {
   network: StellarNetwork;
+  networkPassphrase: string;
   horizonUrl: string;
   sorobanRpcUrl: string;
   timeout: number;

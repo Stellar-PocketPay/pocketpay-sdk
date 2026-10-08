@@ -127,17 +127,28 @@ describe('diagnostics hooks (opt-in)', () => {
     expect(JSON.stringify(created)).not.toContain(wallet.secretKey);
   });
 
-  it('resolveConfig emits config.resolved when enabled', () => {
+  it('resolveConfig emits support-safe config.resolved endpoint origins', () => {
     const events: DiagnosticsEvent[] = [];
     enableDiagnostics({
       hooks: { onEvent: (e) => events.push(e) },
     });
 
-    resolveConfig({ network: 'testnet' });
+    const horizonSecret = 'horizon-credential-value';
+    const rpcSecret = 'soroban-credential-value';
+    resolveConfig({
+      network: 'testnet',
+      horizonUrl:
+        `https://user:${horizonSecret}@horizon.example.test/private/${horizonSecret}?api_key=${horizonSecret}#secret`,
+      sorobanRpcUrl:
+        `https://rpcuser:${rpcSecret}@soroban.example.test/private/${rpcSecret}?token=${rpcSecret}#secret`,
+    });
     const resolved = events.find((e) => e.type === 'config.resolved');
     expect(resolved).toBeDefined();
     expect(resolved!.data.network).toBe('testnet');
-    expect(resolved!.data).toHaveProperty('horizonUrl');
+    expect(resolved!.data.horizonUrl).toBe('https://horizon.example.test');
+    expect(resolved!.data.sorobanRpcUrl).toBe('https://soroban.example.test');
+    expect(JSON.stringify(resolved)).not.toContain(horizonSecret);
+    expect(JSON.stringify(resolved)).not.toContain(rpcSecret);
     expect(resolved!.data).not.toHaveProperty('secretKey');
   });
 

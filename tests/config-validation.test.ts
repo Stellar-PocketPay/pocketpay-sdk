@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   validatePocketPayConfig,
+  getNetworkPassphrase,
   ConfigValidationResult,
   ConfigValidationIssue,
 } from '../src';
@@ -30,6 +31,9 @@ describe('validatePocketPayConfig', () => {
       expect(result.issues).toHaveLength(0);
       expect(result.config).toBeDefined();
       expect(result.config?.network).toBe('testnet');
+      expect(result.config?.networkPassphrase).toBe(
+        getNetworkPassphrase('testnet')
+      );
       expect(result.config?.horizonUrl).toContain('testnet');
       expect(result.config?.sorobanRpcUrl).toContain('testnet');
       expect(result.config?.timeout).toBe(30000);
@@ -58,8 +62,9 @@ describe('validatePocketPayConfig', () => {
     it('returns valid result for explicit valid mainnet config', () => {
       const result = validatePocketPayConfig({
         network: 'mainnet',
+        networkPassphrase: getNetworkPassphrase('mainnet'),
         horizonUrl: 'https://horizon.stellar.org',
-        sorobanRpcUrl: 'https://soroban.stellar.org',
+        sorobanRpcUrl: 'https://rpc.mainnet.example.com',
         timeout: 30000,
       });
 
@@ -80,6 +85,22 @@ describe('validatePocketPayConfig', () => {
         field: 'network',
         code: 'INVALID_NETWORK',
       });
+      expect(result.config).toBeUndefined();
+    });
+
+    it('reports a typed error for a network passphrase mismatch', () => {
+      const result = validatePocketPayConfig({
+        network: 'mainnet',
+        networkPassphrase: getNetworkPassphrase('testnet'),
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          field: 'networkPassphrase',
+          code: 'INVALID_NETWORK_PASSPHRASE',
+        })
+      );
       expect(result.config).toBeUndefined();
     });
 

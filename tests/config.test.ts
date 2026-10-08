@@ -37,6 +37,7 @@ describe('Config Module', () => {
 
     it('should respect environment variables', () => {
       process.env.STELLAR_NETWORK = 'mainnet';
+      process.env.STELLAR_SOROBAN_RPC_URL = 'https://rpc.mainnet.example.com';
       const config = resolveConfig();
       expect(config.network).toBe('mainnet');
       expect(config.horizonUrl).toBe('https://horizon.stellar.org');
@@ -46,6 +47,7 @@ describe('Config Module', () => {
       const config = resolveConfig({
         network: 'mainnet',
         horizonUrl: 'https://custom-horizon.example.com',
+        sorobanRpcUrl: 'https://rpc.mainnet.example.com',
       });
       expect(config.network).toBe('mainnet');
       expect(config.horizonUrl).toBe('https://custom-horizon.example.com');
@@ -483,9 +485,9 @@ describe('Config Module', () => {
       expect(getSorobanRpcUrl()).toBe('https://soroban-testnet.stellar.org');
     });
 
-    it('should return the mainnet Soroban RPC URL for mainnet', () => {
+    it('should require a Soroban RPC provider for mainnet', () => {
       delete process.env.STELLAR_SOROBAN_RPC_URL;
-      expect(getSorobanRpcUrl({ network: 'mainnet' })).toBe('https://soroban.stellar.org');
+      expect(() => getSorobanRpcUrl({ network: 'mainnet' })).toThrow(PocketPayError);
     });
 
     it('should respect an explicit sorobanRpcUrl override', () => {

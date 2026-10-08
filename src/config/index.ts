@@ -17,16 +17,32 @@ import {
   PocketPayError,
 } from '../types';
 import { DisabledFeatureError, FeatureContext } from '../errors';
-import { redactSensitive } from '../utils';
 import { emitDiagnosticsEvent } from '../diagnostics/hooks';
 // ─── Default URLs ───────────────────────────────────────────────────────────
+export const NETWORK_PRESETS = {
+  testnet: {
+    horizonUrl: 'https://horizon-testnet.stellar.org',
+    sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
+    networkPassphrase: StellarSDK.Networks.TESTNET,
+  },
+  mainnet: {
+    horizonUrl: 'https://horizon.stellar.org',
+    // SDF does not provide a public Mainnet RPC endpoint. Mainnet callers
+    // must choose an ecosystem provider through config or the environment.
+    sorobanRpcUrl: '',
+    networkPassphrase: StellarSDK.Networks.PUBLIC,
+  },
+} as const satisfies Record<
+  StellarNetwork,
+  { horizonUrl: string; sorobanRpcUrl: string; networkPassphrase: string }
+>;
 const HORIZON_URLS: Record<StellarNetwork, string> = {
-  testnet: 'https://horizon-testnet.stellar.org',
-  mainnet: 'https://horizon.stellar.org',
+  testnet: NETWORK_PRESETS.testnet.horizonUrl,
+  mainnet: NETWORK_PRESETS.mainnet.horizonUrl,
 };
 const SOROBAN_RPC_URLS: Record<StellarNetwork, string> = {
-  testnet: 'https://soroban-testnet.stellar.org',
-  mainnet: 'https://soroban.stellar.org',
+  testnet: NETWORK_PRESETS.testnet.sorobanRpcUrl,
+  mainnet: NETWORK_PRESETS.mainnet.sorobanRpcUrl,
 };
 const NETWORK_PASSPHRASES: Record<StellarNetwork, string> = {
   testnet: StellarSDK.Networks.TESTNET,
@@ -44,14 +60,36 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 export function validateNetwork(network: unknown): asserts network is StellarNetwork {
   if (network !== 'testnet' && network !== 'mainnet') {
     throw new PocketPayError(
-      `Unsupported network: "${network}". Supported networks: testnet, mainnet`,
+      'Unsupported network. Supported networks: testnet, mainnet',
       'INVALID_NETWORK',
       {
         validation: {
           field: 'network',
           reason: 'unsupported',
-          value: network as string
+          value: sanitizeValue(network) as string
         }
+      }
+    );
+  }
+}
+
+export function validateNetworkPassphrase(
+  network: StellarNetwork,
+  networkPassphrase: unknown
+): asserts networkPassphrase is string {
+  validateNetwork(network);
+  if (
+    typeof networkPassphrase !== 'string' ||
+    networkPassphrase !== NETWORK_PASSPHRASES[network]
+  ) {
+    throw new PocketPayError(
+      `Network passphrase does not match the configured ${network} network.`,
+      'INVALID_NETWORK_PASSPHRASE',
+      {
+        validation: {
+          field: 'networkPassphrase',
+          reason: 'network_mismatch',
+        },
       }
     );
   }
@@ -67,18 +105,18 @@ export function validateNetwork(network: unknown): asserts network is StellarNet
 export function validateUrl(url: string, fieldName: string, errorCode: string, field: string): void {
   try {
     const parsed = new URL(url);
-    if (!parsed.protocol.startsWith('http')) {
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
       throw new Error('Protocol must be http or https');
     }
   } catch (error) {
     throw new PocketPayError(
-      `Invalid ${fieldName}: "${url}". Must be a valid HTTP(S) URL.`,
+      `Invalid ${fieldName}: [REDACTED]. Must be a valid HTTP(S) URL.`,
       errorCode,
       {
         validation: {
           field,
           reason: 'invalid_url',
-          value: url
+          value: sanitizeValue(url) as string
         }
       }
     );
@@ -111,13 +149,13 @@ export function validateSorobanRpcUrl(url: string): void {
 export function validateTimeout(timeout: unknown): asserts timeout is number {
   if (typeof timeout !== 'number') {
     throw new PocketPayError(
-      `Invalid timeout: "${timeout}". Timeout must be a number (milliseconds).`,
+      'Invalid timeout. Timeout must be a number (milliseconds).',
       'INVALID_TIMEOUT',
       {
         validation: {
           field: 'timeout',
           reason: 'invalid_type',
-          value: timeout as string
+          value: sanitizeValue(timeout) as string
         }
       }
     );
@@ -159,26 +197,26 @@ export function validateTimeout(timeout: unknown): asserts timeout is number {
 export function validateContractId(contractId: string): void {
   if (typeof contractId !== 'string' || contractId.length === 0) {
     throw new PocketPayError(
-      `Invalid contract ID: "${contractId}". Contract ID must be a non-empty string.`,
+      `Invalid contract ID: "[REDACTED]". Contract ID must be a non-empty string.`,
       'INVALID_CONTRACT_ID',
       {
         validation: {
           field: 'contractId',
           reason: 'empty',
-          value: contractId
+          value: sanitizeValue(contractId) as string
         }
       }
     );
   }
   if (!contractId.startsWith('C') || contractId.length !== 56) {
     throw new PocketPayError(
-      `Invalid contract ID: "${contractId}". Contract ID must be a 56-character base32 string starting with 'C'.`,
+      `Invalid contract ID: "[REDACTED]". Contract ID must be a 56-character base32 string starting with 'C'.`,
       'INVALID_CONTRACT_ID',
       {
         validation: {
           field: 'contractId',
           reason: 'invalid_format',
-          value: contractId
+          value: sanitizeValue(contractId) as string
         }
       }
     );
@@ -186,13 +224,13 @@ export function validateContractId(contractId: string): void {
   // Validate base32 characters (base32 uses A-Z and 2-7)
   if (!/^C[A-Z2-7]{55}$/.test(contractId)) {
     throw new PocketPayError(
-      `Invalid contract ID format: "${contractId}". Contract ID must contain only base32 characters (A-Z, 2-7).`,
+      `Invalid contract ID format: "[REDACTED]". Contract ID must contain only base32 characters (A-Z, 2-7).`,
       'INVALID_CONTRACT_ID',
       {
         validation: {
           field: 'contractId',
           reason: 'invalid_characters',
-          value: contractId
+          value: sanitizeValue(contractId) as string
         }
       }
     );
@@ -336,6 +374,14 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
       : process.env.STELLAR_NETWORK ?? 'testnet';
   validateNetwork(network);
 
+  const networkPassphraseSource: ConfigSource =
+    overrides?.networkPassphrase !== undefined ? 'override' : 'default';
+  const networkPassphrase =
+    overrides?.networkPassphrase !== undefined
+      ? overrides.networkPassphrase
+      : NETWORK_PASSPHRASES[network];
+  validateNetworkPassphrase(network, networkPassphrase);
+
   const horizonUrlSource: ConfigSource =
     overrides?.horizonUrl !== undefined
       ? 'override'
@@ -374,27 +420,28 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
 
   // Timeout: explicit override > env var > SDK default.
   const timeout =
-    overrides?.timeout ??
-    (process.env.STELLAR_TIMEOUT
-      ? parseInt(process.env.STELLAR_TIMEOUT, 10)
+    overrides?.timeout !== undefined
+      ? overrides.timeout
+      : (process.env.STELLAR_TIMEOUT !== undefined
+      ? Number(process.env.STELLAR_TIMEOUT)
       : DEFAULT_TIMEOUT_MS);
   validateTimeout(timeout);
 
   let contractIdSource: ConfigSource | undefined = undefined;
   if (overrides?.contractId !== undefined) {
     contractIdSource = 'override';
-  } else if (process.env.STELLAR_CONTRACT_ID !== undefined || process.env.VAULT_CONTRACT_ID !== undefined) {
+  } else if (process.env.STELLAR_CONTRACT_ID !== undefined) {
     contractIdSource = 'env';
   }
 
-  // Contract ID: preserve an explicitly-provided value (including '').
-  // An empty string is a valid "no contract configured" sentinel and is
-  // passed through unvalidated; a non-empty value is validated.
+  // General SDK config resolves STELLAR_CONTRACT_ID only. Vault operations
+  // apply their own documented params -> SDKConfig -> VAULT_CONTRACT_ID ->
+  // STELLAR_CONTRACT_ID fallback without changing the global config value.
   const contractId =
     overrides?.contractId !== undefined
       ? overrides.contractId
       : process.env.STELLAR_CONTRACT_ID;
-  if (contractId !== undefined && contractId.length > 0) {
+  if (contractId !== undefined && contractId !== '') {
     validateContractId(contractId);
   }
 
@@ -402,6 +449,7 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
 
   const sources: ConfigSourceMetadata = {
     network: networkSource,
+    networkPassphrase: networkPassphraseSource,
     horizonUrl: horizonUrlSource,
     sorobanRpcUrl: sorobanRpcUrlSource,
     timeout: timeoutSource,
@@ -411,6 +459,7 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
 
   const resolved: ResolvedSDKConfig = {
     network,
+    networkPassphrase,
     horizonUrl,
     sorobanRpcUrl,
     timeout,
@@ -421,8 +470,8 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
 
   emitDiagnosticsEvent('config', 'config.resolved', {
     network: resolved.network,
-    horizonUrl: resolved.horizonUrl,
-    sorobanRpcUrl: resolved.sorobanRpcUrl,
+    horizonUrl: new URL(resolved.horizonUrl).origin,
+    sorobanRpcUrl: new URL(resolved.sorobanRpcUrl).origin,
     timeoutMs: resolved.timeout,
     contractIdConfigured:
       typeof resolved.contractId === 'string' && resolved.contractId.length > 0,
@@ -438,10 +487,11 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
  * Never exposes secret keys or sensitive strings in issue outputs.
  */
 function sanitizeValue(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return redactSensitive(value);
+  // Never echo supplied URLs, credentials, or unknown objects in diagnostics.
+  if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
   }
-  return value;
+  return '[REDACTED]';
 }
 
 /**
@@ -492,6 +542,23 @@ export function validatePocketPayConfig(
     network = rawNetwork;
   }
 
+  const rawNetworkPassphrase: unknown =
+    overrides?.networkPassphrase !== undefined
+      ? overrides.networkPassphrase
+      : NETWORK_PASSPHRASES[network];
+  if (
+    typeof rawNetworkPassphrase !== 'string' ||
+    ((rawNetwork === 'testnet' || rawNetwork === 'mainnet') &&
+      rawNetworkPassphrase !== NETWORK_PASSPHRASES[network])
+  ) {
+    issues.push({
+      severity: 'error',
+      field: 'networkPassphrase',
+      code: 'INVALID_NETWORK_PASSPHRASE',
+      message: `Network passphrase does not match the configured ${network} network.`,
+    });
+  }
+
   // 2. Horizon URL Validation & Warnings
   const rawHorizonUrl: unknown =
     overrides?.horizonUrl !== undefined
@@ -503,18 +570,18 @@ export function validatePocketPayConfig(
       severity: 'error',
       field: 'horizonUrl',
       code: 'INVALID_HORIZON_URL',
-      message: `Invalid Horizon URL: "${rawHorizonUrl}". Must be a non-empty string.`,
+      message: `Invalid Horizon URL: "[REDACTED]". Must be a non-empty string.`,
       value: sanitizeValue(rawHorizonUrl),
     });
   } else {
     try {
       const parsed = new URL(rawHorizonUrl);
-      if (!parsed.protocol.startsWith('http')) {
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
         issues.push({
           severity: 'error',
           field: 'horizonUrl',
           code: 'INVALID_HORIZON_URL',
-          message: `Invalid Horizon URL: "${rawHorizonUrl}". Protocol must be http or https.`,
+          message: `Invalid Horizon URL: "[REDACTED]". Protocol must be http or https.`,
           value: sanitizeValue(rawHorizonUrl),
         });
       } else {
@@ -528,7 +595,7 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'horizonUrl',
             code: 'INSECURE_HTTP_URL',
-            message: `Horizon URL "${rawHorizonUrl}" uses unencrypted HTTP protocol for a non-localhost host.`,
+            message: `Horizon URL "[REDACTED]" uses unencrypted HTTP protocol for a non-localhost host.`,
             value: sanitizeValue(rawHorizonUrl),
           });
         }
@@ -540,7 +607,7 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'horizonUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Horizon URL "${rawHorizonUrl}" contains "testnet" but network is configured as mainnet.`,
+            message: `Horizon URL "[REDACTED]" contains "testnet" but network is configured as mainnet.`,
             value: sanitizeValue(rawHorizonUrl),
           });
         } else if (
@@ -552,7 +619,7 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'horizonUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Horizon URL "${rawHorizonUrl}" points to Stellar public mainnet endpoint but network is configured as testnet.`,
+            message: `Horizon URL "[REDACTED]" points to Stellar public mainnet endpoint but network is configured as testnet.`,
             value: sanitizeValue(rawHorizonUrl),
           });
         }
@@ -562,7 +629,7 @@ export function validatePocketPayConfig(
         severity: 'error',
         field: 'horizonUrl',
         code: 'INVALID_HORIZON_URL',
-        message: `Invalid Horizon URL: "${rawHorizonUrl}". Must be a valid HTTP(S) URL.`,
+        message: `Invalid Horizon URL: "[REDACTED]". Must be a valid HTTP(S) URL.`,
         value: sanitizeValue(rawHorizonUrl),
       });
     }
@@ -579,18 +646,18 @@ export function validatePocketPayConfig(
       severity: 'error',
       field: 'sorobanRpcUrl',
       code: 'INVALID_SOROBAN_RPC_URL',
-      message: `Invalid Soroban RPC URL: "${rawSorobanRpcUrl}". Must be a non-empty string.`,
+      message: `Invalid Soroban RPC URL: "[REDACTED]". Must be a non-empty string.`,
       value: sanitizeValue(rawSorobanRpcUrl),
     });
   } else {
     try {
       const parsed = new URL(rawSorobanRpcUrl);
-      if (!parsed.protocol.startsWith('http')) {
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
         issues.push({
           severity: 'error',
           field: 'sorobanRpcUrl',
           code: 'INVALID_SOROBAN_RPC_URL',
-          message: `Invalid Soroban RPC URL: "${rawSorobanRpcUrl}". Protocol must be http or https.`,
+          message: `Invalid Soroban RPC URL: "[REDACTED]". Protocol must be http or https.`,
           value: sanitizeValue(rawSorobanRpcUrl),
         });
       } else {
@@ -604,7 +671,7 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'sorobanRpcUrl',
             code: 'INSECURE_HTTP_URL',
-            message: `Soroban RPC URL "${rawSorobanRpcUrl}" uses unencrypted HTTP protocol for a non-localhost host.`,
+            message: `Soroban RPC URL "[REDACTED]" uses unencrypted HTTP protocol for a non-localhost host.`,
             value: sanitizeValue(rawSorobanRpcUrl),
           });
         }
@@ -616,7 +683,7 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'sorobanRpcUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Soroban RPC URL "${rawSorobanRpcUrl}" contains "testnet" but network is configured as mainnet.`,
+            message: `Soroban RPC URL "[REDACTED]" contains "testnet" but network is configured as mainnet.`,
             value: sanitizeValue(rawSorobanRpcUrl),
           });
         } else if (
@@ -628,7 +695,7 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'sorobanRpcUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Soroban RPC URL "${rawSorobanRpcUrl}" points to Stellar public mainnet endpoint but network is configured as testnet.`,
+            message: `Soroban RPC URL "[REDACTED]" points to Stellar public mainnet endpoint but network is configured as testnet.`,
             value: sanitizeValue(rawSorobanRpcUrl),
           });
         }
@@ -638,7 +705,7 @@ export function validatePocketPayConfig(
         severity: 'error',
         field: 'sorobanRpcUrl',
         code: 'INVALID_SOROBAN_RPC_URL',
-        message: `Invalid Soroban RPC URL: "${rawSorobanRpcUrl}". Must be a valid HTTP(S) URL.`,
+        message: `Invalid Soroban RPC URL: "[REDACTED]". Must be a valid HTTP(S) URL.`,
         value: sanitizeValue(rawSorobanRpcUrl),
       });
     }
@@ -646,9 +713,10 @@ export function validatePocketPayConfig(
 
   // 4. Timeout Validation & Warnings
   const rawTimeout: unknown =
-    overrides?.timeout ??
-    (process.env.STELLAR_TIMEOUT
-      ? parseInt(process.env.STELLAR_TIMEOUT, 10)
+    overrides?.timeout !== undefined
+      ? overrides.timeout
+      : (process.env.STELLAR_TIMEOUT !== undefined
+      ? Number(process.env.STELLAR_TIMEOUT)
       : DEFAULT_TIMEOUT_MS);
 
   if (typeof rawTimeout !== 'number' || Number.isNaN(rawTimeout)) {
@@ -656,7 +724,7 @@ export function validatePocketPayConfig(
       severity: 'error',
       field: 'timeout',
       code: 'INVALID_TIMEOUT',
-      message: `Invalid timeout: "${rawTimeout}". Timeout must be a number (milliseconds).`,
+      message: 'Invalid timeout. Timeout must be a number (milliseconds).',
       value: sanitizeValue(rawTimeout),
     });
   } else if (rawTimeout <= 0) {
@@ -703,7 +771,6 @@ export function validatePocketPayConfig(
 
   if (
     rawContractId !== undefined &&
-    rawContractId !== null &&
     rawContractId !== ''
   ) {
     if (typeof rawContractId !== 'string') {
@@ -711,7 +778,7 @@ export function validatePocketPayConfig(
         severity: 'error',
         field: 'contractId',
         code: 'INVALID_CONTRACT_ID',
-        message: `Invalid contract ID: "${rawContractId}". Contract ID must be a non-empty string.`,
+        message: `Invalid contract ID: "[REDACTED]". Contract ID must be a non-empty string.`,
         value: sanitizeValue(rawContractId),
       });
     } else if (
@@ -723,7 +790,7 @@ export function validatePocketPayConfig(
         severity: 'error',
         field: 'contractId',
         code: 'INVALID_CONTRACT_ID',
-        message: `Invalid contract ID: "${rawContractId}". Contract ID must be a 56-character base32 string starting with 'C'.`,
+        message: `Invalid contract ID: "[REDACTED]". Contract ID must be a 56-character base32 string starting with 'C'.`,
         value: sanitizeValue(rawContractId),
       });
     }
@@ -816,9 +883,12 @@ export function getSorobanRpcUrl(config?: Partial<SDKConfig>): string {
  * @throws PocketPayError if network is unsupported
  */
 export function getNetworkPassphrase(network?: StellarNetwork): string {
-  const resolvedNetwork = network ?? resolveConfig().network;
-  validateNetwork(resolvedNetwork);
-  return NETWORK_PASSPHRASES[resolvedNetwork];
+  const rawNetwork: unknown =
+    network !== undefined
+      ? network
+      : process.env.STELLAR_NETWORK ?? 'testnet';
+  validateNetwork(rawNetwork);
+  return NETWORK_PASSPHRASES[rawNetwork];
 }
 /**
  * Returns the Friendbot URL for testnet funding.
