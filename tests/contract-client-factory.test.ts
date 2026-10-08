@@ -23,14 +23,18 @@ const mocks = vi.hoisted(() => {
     setTimeout: vi.fn(),
     build: vi.fn(),
   };
+  // A signed Transaction exposes its envelope hash before submission.
+  const signedHash = 'ab'.repeat(32);
   const preparedTransaction = {
     sign: vi.fn(),
+    hash: () => Buffer.from(signedHash, 'hex'),
   };
 
   return {
     server,
     contract,
     transactionBuilder,
+    signedHash,
     preparedTransaction,
     Server: vi.fn(),
     Contract: vi.fn(),
@@ -112,7 +116,7 @@ describe('Soroban contract client factory', () => {
     });
     mocks.server.sendTransaction.mockResolvedValue({
       status: 'PENDING',
-      hash: 'transaction-hash',
+      hash: mocks.signedHash,
     });
     mocks.server.getTransaction.mockResolvedValue({
       status: 'SUCCESS',
@@ -170,13 +174,36 @@ describe('Soroban contract client factory', () => {
     expect(result).toEqual({
       success: true,
       status: 'success',
-      hash: 'transaction-hash',
+      hash: mocks.signedHash,
       value: 'confirmed',
       simulationStatus: 'success',
       warnings: undefined,
     });
     expect(mocks.preparedTransaction.sign).toHaveBeenCalledOnce();
     expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the signed hash pending when submission times out before an RPC response', async () => {
+    mocks.server.simulateTransaction.mockResolvedValue({
+      result: { retval: { value: undefined } },
+    });
+    mocks.server.sendTransaction.mockRejectedValue(new Error('socket timeout'));
+    const client = createContractClient({ contractId, methods });
+
+    const result = await client.invoke({
+      method: 'deposit',
+      params: { user: sourcePublicKey, amount: 10n },
+      signWith: sourceSecret,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 'pending',
+      hash: mocks.signedHash,
+      errorCode: 'TX_STATUS_UNKNOWN',
+    });
+    expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
+    expect(mocks.server.getTransaction).not.toHaveBeenCalled();
   });
 
   it('maps contract-specific simulation failures consistently', async () => {

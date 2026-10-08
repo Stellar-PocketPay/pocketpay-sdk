@@ -13,6 +13,7 @@ import {
   SorobanInvocationStatus,
 } from '../types';
 import { withTimeout } from '../network';
+import { pollSorobanTransactionStatus, submitSorobanWithKnownHash } from './status-polling';
 import { ErrorCode, ERROR_CODES } from '../errors/codes';
 import { UnsupportedFeatureError } from '../errors/unsupported';
 import {
@@ -367,12 +368,23 @@ export class ContractClient<
       prepared.sign(keypair);
 
       // Submit the transaction
-      const sendResult = await withTimeout(
-        'Soroban transaction submission',
+      const submitted = await submitSorobanWithKnownHash(
+        prepared.hash().toString('hex'),
+        () => this.sorobanServer.sendTransaction(prepared),
         this.config.timeout,
-        this.sorobanServer.sendTransaction(prepared),
       );
 
+      if (submitted.kind === 'unknown') {
+        return {
+          success: false,
+          status: 'pending',
+          hash: submitted.hash,
+          error: 'Transaction submission status is unknown; query this hash before retrying.',
+          errorCode: 'TX_STATUS_UNKNOWN',
+          simulationStatus: mapped.status,
+        };
+      }
+      const sendResult = submitted.response;
       if (sendResult.status === 'ERROR') {
         return {
           success: false,
@@ -382,8 +394,22 @@ export class ContractClient<
         };
       }
 
-      // Poll for transaction status
-      const getResult = await this.pollTransactionStatus(sendResult.hash);
+      // A submitted transaction can remain NOT_FOUND or the status endpoint
+      // can fail. Neither outcome proves on-chain failure or permits retry.
+      const getResult = await pollSorobanTransactionStatus(
+        () => this.sorobanServer.getTransaction(sendResult.hash),
+        this.config.timeout,
+      );
+      if (getResult === null) {
+        return {
+          success: false,
+          status: 'pending',
+          hash: sendResult.hash,
+          error: 'Transaction confirmation is unknown; query this hash before resubmitting.',
+          errorCode: 'TX_STATUS_UNKNOWN',
+          simulationStatus: mapped.status,
+        };
+      }
 
       if (getResult.status === 'SUCCESS') {
         let value: T | undefined;
@@ -406,6 +432,7 @@ export class ContractClient<
       return {
         success: false,
         status: 'failed',
+        hash: sendResult.hash,
         error: `Transaction status: ${getResult.status}`,
         errorCode: `TX_STATUS_${getResult.status}`,
       };
@@ -527,28 +554,6 @@ export class ContractClient<
       );
     }
     return resolved ?? {};
-  }
-
-  /**
-   * Polls for transaction status until it resolves.
-   */
-  private async pollTransactionStatus(hash: string): Promise<StellarSDK.rpc.Api.GetSuccessfulTransactionResponse | StellarSDK.rpc.Api.GetFailedTransactionResponse> {
-    let getResult = await withTimeout(
-      'Soroban transaction status request',
-      this.config.timeout,
-      this.sorobanServer.getTransaction(hash),
-    );
-
-    while (getResult.status === 'NOT_FOUND') {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      getResult = await withTimeout(
-        'Soroban transaction status request',
-        this.config.timeout,
-        this.sorobanServer.getTransaction(hash),
-      );
-    }
-
-    return getResult;
   }
 
   /**

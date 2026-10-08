@@ -56,6 +56,7 @@ describe('Soroban Vault Methods Boundary Tests', () => {
   const mockSecret = 'SA3XW4YQ3F53G4J7G2KJZ4XJY6K32Z5M3Q5H65EHQ6S7L3M3J2KJZ4XX'; // valid format secret length = 56
   const mockPublicKey = 'GA3XW4YQ3F53G4J7G2KJZ4XJY6K32Z5M3Q5H65EHQ6S7L3M3J2KJZ4XX'; // valid format public key = 56
   const contractId = 'CA3XW4YQ3F53G4J7G2KJZ4XJY6K32Z5M3Q5H65EHQ6S7L3M3J2KJZ4XX';
+  const signedHash = 'cd'.repeat(32);
   
   let mockServer: any;
   let mockKeypair: any;
@@ -104,12 +105,13 @@ describe('Soroban Vault Methods Boundary Tests', () => {
       result: { retval: { type: 'scVal' } } // For getBalance
     });
     
-    const mockPrepared = { sign: vi.fn() };
+    // A signed Transaction exposes its envelope hash before submission.
+    const mockPrepared = { sign: vi.fn(), hash: () => Buffer.from(signedHash, 'hex') };
     (StellarSDK.rpc.assembleTransaction as any).mockReturnValue({
       build: vi.fn().mockReturnValue(mockPrepared)
     });
 
-    mockServer.sendTransaction.mockResolvedValue({ status: 'PENDING', hash: 'mock-hash' });
+    mockServer.sendTransaction.mockResolvedValue({ status: 'PENDING', hash: signedHash });
     mockServer.getTransaction.mockResolvedValue({ status: 'SUCCESS' });
   });
 
@@ -133,7 +135,7 @@ describe('Soroban Vault Methods Boundary Tests', () => {
 
     it('returns expected output shape on success', async () => {
       const result = await depositToVault({ sourceSecret: mockSecret, amount: '10' });
-      expect(result).toMatchObject({ success: true, hash: 'mock-hash', operation: 'deposit' });
+      expect(result).toMatchObject({ success: true, hash: signedHash, operation: 'deposit' });
     });
 
     it('maps simulation errors to PocketPayError / VaultResult', async () => {
@@ -147,6 +149,20 @@ describe('Soroban Vault Methods Boundary Tests', () => {
     it('wraps unhandled RPC errors in PocketPayError', async () => {
       mockServer.getAccount.mockRejectedValue(new Error('Network offline'));
       await expect(depositToVault({ sourceSecret: mockSecret, amount: '10' })).rejects.toThrowError(/Vault deposit failed/);
+    });
+
+    it('keeps the signed hash pending when submission times out before an RPC response', async () => {
+      mockServer.sendTransaction.mockRejectedValue(new Error('socket timeout'));
+      const result = await depositToVault({ sourceSecret: mockSecret, amount: '10' });
+      expect(result).toMatchObject({
+        success: false,
+        status: 'pending',
+        operation: 'deposit',
+        hash: signedHash,
+        errorCode: 'TX_STATUS_UNKNOWN',
+      });
+      expect(mockServer.sendTransaction).toHaveBeenCalledOnce();
+      expect(mockServer.getTransaction).not.toHaveBeenCalled();
     });
   });
 
@@ -166,13 +182,27 @@ describe('Soroban Vault Methods Boundary Tests', () => {
 
     it('returns expected output shape on success', async () => {
       const result = await withdrawFromVault({ sourceSecret: mockSecret, amount: '5' });
-      expect(result).toMatchObject({ success: true, hash: 'mock-hash', operation: 'withdraw' });
+      expect(result).toMatchObject({ success: true, hash: signedHash, operation: 'withdraw' });
     });
 
     it('maps RPC send errors correctly', async () => {
       mockServer.sendTransaction.mockResolvedValue({ status: 'ERROR', errorResult: 'tx_failed' });
       const result = await withdrawFromVault({ sourceSecret: mockSecret, amount: '5' });
       expect(result).toMatchObject({ success: false, error: 'Send error: tx_failed', status: 'failed' });
+    });
+
+    it('keeps the signed hash pending when submission times out before an RPC response', async () => {
+      mockServer.sendTransaction.mockRejectedValue(new Error('socket timeout'));
+      const result = await withdrawFromVault({ sourceSecret: mockSecret, amount: '5' });
+      expect(result).toMatchObject({
+        success: false,
+        status: 'pending',
+        operation: 'withdraw',
+        hash: signedHash,
+        errorCode: 'TX_STATUS_UNKNOWN',
+      });
+      expect(mockServer.sendTransaction).toHaveBeenCalledOnce();
+      expect(mockServer.getTransaction).not.toHaveBeenCalled();
     });
   });
 
