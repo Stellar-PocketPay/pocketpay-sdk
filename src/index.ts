@@ -450,6 +450,11 @@ export type {
   AccountIdentity,
   Signer,
   ExternalSignerAdapter,
+  AbortableExternalSignerAdapter,
+  ExternalSignatureRequest,
+  ExternalDeviceSignOutcome,
+  ExternalSignatureOutcome,
+  ExternalSignatureOptions,
   LocalSignerConfig,
   AccountAbstraction,
   ReadOnlyAccount,
@@ -462,6 +467,7 @@ export {
   createReadOnlyAccount,
   createLocalAccount,
   createAccountWithSigner,
+  requestExternalSignature,
   // Capability check: type guard narrowing AccountAbstraction to SigningAccount
   canSignTransaction,
 } from './account';

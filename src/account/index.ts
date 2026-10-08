@@ -39,6 +39,16 @@ export type {
   SigningAccount,
 } from './types';
 
+// ─── Abort-aware external signer contract (issue #212) ────────────────────────
+export type {
+  AbortableExternalSignerAdapter,
+  ExternalSignatureRequest,
+  ExternalDeviceSignOutcome,
+  ExternalSignatureOutcome,
+  ExternalSignatureOptions,
+} from './external-signer';
+export { requestExternalSignature } from './external-signer';
+
 // ─── Capability check ─────────────────────────────────────────────────────────
 export { canSignTransaction } from './types';
 
