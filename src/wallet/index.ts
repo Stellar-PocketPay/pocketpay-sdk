@@ -20,7 +20,6 @@ import {
 } from '../types';
 import {
   validatePublicKey,
-  validateSecretKey,
   wrapError,
   toSuccessResult,
   toFailureResult,
@@ -34,6 +33,8 @@ import { ErrorCode } from '../errors/codes';
 import { CapabilityMismatchError } from '../errors/unsupported';
 import { NetworkClient, withTimeout } from '../network';
 import { emitDiagnosticsEvent } from '../diagnostics/hooks';
+import { validateWalletImportInput, sanitizeWalletImportError } from './importValidation';
+export { validateWalletImportInput } from './importValidation';
 
 /**
  * Creates a new random Stellar keypair.
@@ -81,7 +82,7 @@ export function createWallet(): WalletKeypair {
  * @throws {PocketPayError} `INVALID_SECRET_KEY` if the secret key is malformed
  */
 export function importWallet(secretKey: string): WalletKeypair {
-  validateSecretKey(secretKey);
+  validateWalletImportInput(secretKey);
   const trimmed = secretKey.trim();
   try {
     const kp = StellarSDK.Keypair.fromSecret(trimmed);
@@ -92,28 +93,20 @@ export function importWallet(secretKey: string): WalletKeypair {
     });
     return wallet;
   } catch (error) {
-    if (error instanceof PocketPayError) {
-      throw error;
-    }
-    throw new PocketPayError(
-      'Invalid Stellar secret key',
-      'INVALID_SECRET_KEY',
-      {
-        validation: {
-          field: 'secretKey',
-          reason: 'invalid_format',
-        },
-        cause: error instanceof Error ? error : undefined,
-      },
-    );
+    // Raw StellarSDK errors sometimes contain original signing material.
+    // Preserve the typed reason but never copy the raw exception or cause.
+    throw sanitizeWalletImportError(error);
   }
 }
 
 /** Derives the public key from a secret key. */
 export function getPublicKey(secretKey: string): string {
-  validateSecretKey(secretKey);
-  const trimmed = secretKey.trim();
-  return StellarSDK.Keypair.fromSecret(trimmed).publicKey();
+  validateWalletImportInput(secretKey);
+  try {
+    return StellarSDK.Keypair.fromSecret(secretKey.trim()).publicKey();
+  } catch (error) {
+    throw sanitizeWalletImportError(error);
+  }
 }
 
 /**
@@ -127,10 +120,7 @@ export function safeImportWallet(secretKey: string): PocketPayResult<WalletKeypa
     const wallet = importWallet(secretKey);
     return toSuccessResult(wallet);
   } catch (error) {
-    const pocketErr =
-      error instanceof PocketPayError
-        ? error
-        : wrapError(error, 'Failed to import wallet', 'INVALID_SECRET_KEY');
+    const pocketErr = sanitizeWalletImportError(error);
     return toFailureResult(pocketErr);
   }
 }
@@ -151,15 +141,14 @@ export function enhancedImportWallet(
     const wallet = importWallet(secretKey);
     return toEnhancedSuccessResult(wallet, warnings, recoveryHints);
   } catch (error) {
-    const pocketErr =
-      error instanceof PocketPayError
-        ? error
-        : wrapError(error, 'Failed to import wallet', 'INVALID_SECRET_KEY');
+    const pocketErr = sanitizeWalletImportError(error);
 
     if (pocketErr.code === 'INVALID_SECRET_KEY') {
       recoveryHints.push({
         action: 'check_input',
-        message: 'Ensure the secret key is a valid 56-character Stellar secret key starting with S.',
+        message: pocketErr.validation?.reason === 'public_key_only'
+          ? 'A public address cannot authorize signing. Restore with the private Stellar secret key.'
+          : 'Verify the 56-character Stellar secret key beginning with S and try again.',
         retryable: false,
       });
     }

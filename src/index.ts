@@ -142,6 +142,7 @@ export type { SequenceSnapshot, SequenceProviderOptions } from './account';
 // ─── Wallet ─────────────────────────────────────────────────────────────────
 export {
   createWallet,
+  validateWalletImportInput,
   importWallet,
   safeImportWallet,
   enhancedImportWallet,

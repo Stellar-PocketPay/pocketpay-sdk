@@ -111,3 +111,36 @@ explicitly — what this model does **not** guarantee.
 - Missing-signer, wrong-signer, and unsupported-capability cases raise typed,
   registered error codes rather than generic errors — see
   [Capability Error Standard](./capability_error_standard.md)
+
+## Wallet Import Validation (issue #334)
+
+`validateWalletImportInput(value)` checks signing-capable Stellar secret
+material before import. It distinguishes missing or non-string input, a
+**public-only** G address, unsupported muxed account/contract material
+(M/C addresses), unsupported formats, incorrect length and invalid checksum.
+It accepts a valid S-address secret with surrounding whitespace but never
+includes the supplied material in a validation error.
+
+`importWallet`, `safeImportWallet`, `enhancedImportWallet` and
+`getPublicKey` use this stricter import boundary. The existing generic
+`validateSecretKey` contract and its reason codes remain unchanged.
+Import failures use `PocketPayError` with
+`code: 'INVALID_SECRET_KEY'` and safe `validation.field` /
+`validation.reason` metadata, **without `validation.value` or a raw
+underlying `cause`**. Safe wrappers continue returning results instead
+of throwing; enhanced failures offer input-specific recovery guidance.
+Malformed third-party SDK error objects cannot change this contract: import
+sanitization treats `PocketPayError.code` and `validation.reason` as
+untrusted metadata, guards against accessors or proxy traps that throw,
+and falls back to a fixed `import_failed` reason with no original
+message, cause or secret-bearing fields. The existing focused test
+covers malicious reason/code getters and proxy traps; it is authored
+but not executed in this source publication.
+Do not log caught raw key material from unrelated application code.
+
+The SDK does not persist, overwrite or roll back application-managed
+wallet storage. An invalid import has no effect on any already created
+wallet in SDK memory; applications must replace their stored wallet
+**only after** a successful result. Public addresses are useful for
+read-only access but cannot unlock or recover signing authority. Never
+paste secret keys into diagnostics, issue reports, or support tickets.
