@@ -27,9 +27,11 @@ graph TD
     C -->|Success| D[Return Successful PaymentResult]
     C -->|Transient Timeout / HTTP 504| E[Classify Error: TX_STATUS_UNKNOWN]
     E --> F[Poll Horizon by Hash]
-    F -->|Found in Ledger| G[Return Successful PaymentResult]
+    F -->|Matching successful ledger record| G[Return Successful PaymentResult]
+    F -->|Matching unsuccessful ledger record| K2[Throw TX_FAILED: terminal failure]
+    F -->|Unverified or mismatched record| J
     F -->|Not Found & Within maxTime Bounds| H[Wait & Poll Again]
-    F -->|Not Found & Past maxTime Bounds| I[Throw TX_EXPIRED: Safe to Rebuild & Retry]
+    F -->|Explicit 404 after maxTime| I[Throw TX_EXPIRED: verify finality]
     F -->|Polling Limit Exceeded| J[Throw TX_STATUS_UNKNOWN: Require Manual Check]
     C -->|Final Error: e.g. tx_bad_seq| K[Throw PAYMENT_FAILED: Non-Retryable]
 ```
@@ -46,7 +48,9 @@ Every submission failure is analyzed and categorized via `classifySubmitError`. 
 Every transaction should have a `maxTime` bound (set automatically by `setTimeout` during building). 
 *   If a submission times out, the SDK polls the network for the transaction hash.
 *   If the transaction is not found, polling continues.
-*   If the local system time exceeds the transaction's `maxTime` bound and the transaction is still not found on-chain, we are guaranteed that the transaction has expired and can **never** be accepted by validators. It is now safe to rebuild the transaction with a new sequence number and retry.
+*   Even after the timebound has elapsed, the transaction may have been included in a ledger before expiry. Query Horizon **before** classifying local expiry.
+*   A matching ledger record must explicitly have `successful: true` to be reported as successful. A matching `successful: false` record is a terminal `TX_FAILED`; a missing success flag or mismatched hash remains `TX_STATUS_UNKNOWN`.
+*   Only a Horizon not-found response plus elapsed `maxTime` can produce `TX_EXPIRED`. Verify final ledger state and Horizon index freshness before rebuilding the original payment intent. Network errors and malformed responses never justify automatically rebuilding.
 
 ### 3. Automated & Manual Polling
 The SDK provides:
@@ -107,8 +111,8 @@ try {
     if (error.code === 'TX_STATUS_UNKNOWN') {
       console.error(`Transaction status remains unknown. Hash: ${error.transactionHash}. Check explorer before retrying.`);
     } else if (error.code === 'TX_EXPIRED') {
-      console.log('Transaction expired and never executed. Rebuilding and retrying is safe.');
-      // Rebuild and retry payment...
+      console.log('Timebound elapsed and Horizon did not find this hash; verify finality before rebuilding.');
+      // Do not automatically rebuild from a single not-found response.
     } else {
       console.error(`Submission failed: ${error.code} - ${error.message}`);
     }
@@ -144,9 +148,9 @@ try {
       });
       console.log('Confirmed via polling! Ledger:', txRecord.ledger);
     } catch (pollError) {
-      // If pollTransactionStatus throws TX_EXPIRED, it is safe to rebuild & resubmit
+      // Even if TX_EXPIRED is returned, verify finality before rebuilding
       if (pollError.code === 'TX_EXPIRED') {
-        console.error('Transaction expired. Re-building transaction is safe.');
+        console.error('Timebound elapsed; confirm the ledger outcome before rebuilding.');
       } else {
         console.error('Failed to confirm transaction status. DO NOT retry.');
       }
@@ -156,3 +160,22 @@ try {
   }
 }
 ```
+
+
+## Replay protection: hash identity and confirmed outcome (#205)
+
+A transaction hash identifies one signed envelope, **not** an entire
+business payment intent. Associate both identifiers until a conclusive
+outcome is known. Do not automatically issue another payment on uncertainty.
+
+| Horizon observation | SDK result | Recovery |
+| --- | --- | --- |
+| Matching hash and `successful: true` | Confirmed | Mark the envelope successful; never resubmit |
+| Matching hash and `successful: false` | `TX_FAILED` | Inspect the terminal failure; any new payment requires fresh authorization |
+| Hash mismatch, missing success flag or timeout | `TX_STATUS_UNKNOWN` | Poll a trusted ledger/index; do not submit a replacement |
+| Explicit 404 after `maxTime` | `TX_EXPIRED` | Verify final ledger state before rebuilding the original intent |
+
+A Horizon index can lag behind an accepted transaction. Local timebound
+expiry or a single 404 alone does **not** establish that a previous payment
+never landed on-chain. The poll helper performs read-only lookups and never
+submits a transaction.

@@ -148,7 +148,7 @@ describe('Idempotency Strategy - Status Polling & Submission', () => {
     submitSpy.mockRejectedValue(timeoutError);
 
     // First call returns 404 (Not Found), second call returns the transaction record
-    const txRecord = { hash: txHash, ledger: 54321, created_at: '2026-07-22T00:00:00Z' };
+    const txRecord = { hash: txHash, ledger: 54321, successful: true, created_at: '2026-07-22T00:00:00Z' };
     mockCall
       .mockRejectedValueOnce({ response: { status: 404 } })
       .mockResolvedValueOnce(txRecord);
@@ -178,7 +178,45 @@ describe('Idempotency Strategy - Status Polling & Submission', () => {
       retryable: false,
     });
 
-    expect(mockCall).not.toHaveBeenCalled(); // Exits immediately due to expiration check
+    expect(mockCall).toHaveBeenCalledTimes(1); // Queries ledger before evaluating expiry
+  });
+
+  it('never mistakes a failed ledger transaction for successful payment after timeout', async () => {
+    const tx = buildDummyTransaction();
+    const txHash = tx.hash().toString('hex');
+    submitSpy.mockRejectedValue({ response: { status: 504 }, message: 'Timeout' });
+    mockCall.mockResolvedValue({ hash: txHash, successful: false, ledger: 456 });
+    await expect(
+      submitTransactionIdempotently(tx, { maxPollAttempts: 1, pollIntervalMs: 0 })
+    ).rejects.toMatchObject({ code: 'TX_FAILED', transactionHash: txHash, retryable: false });
+    expect(submitSpy).toHaveBeenCalledTimes(1);
+    expect(mockCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('queries an expired envelope before deciding it was absent from the ledger', async () => {
+    const tx = buildDummyTransaction(1);
+    const record = { hash: tx.hash().toString('hex'), successful: true, ledger: 123 };
+    mockCall.mockResolvedValue(record);
+    await expect(pollTransactionStatus(tx, { maxPollAttempts: 1 })).resolves.toEqual(record);
+    expect(mockCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('never accepts another transaction hash or a missing success flag', async () => {
+    const tx = buildDummyTransaction();
+    const txHash = tx.hash().toString('hex');
+    mockCall.mockResolvedValueOnce({ hash: 'wrong-hash', successful: true, ledger: 4 })
+      .mockResolvedValueOnce({ hash: txHash, ledger: 4 });
+    await expect(pollTransactionStatus(tx, { maxPollAttempts: 2, pollIntervalMs: 0 }))
+      .rejects.toMatchObject({ code: 'TX_STATUS_UNKNOWN', transactionHash: txHash });
+    expect(mockCall).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not call an expired transaction failed when status reads time out', async () => {
+    const tx = buildDummyTransaction(1);
+    mockCall.mockRejectedValue({ code: 'ETIMEDOUT', message: 'timeout' });
+    await expect(pollTransactionStatus(tx, { maxPollAttempts: 1, pollIntervalMs: 0 }))
+      .rejects.toMatchObject({ code: 'TX_STATUS_UNKNOWN', retryable: false });
+    expect(mockCall).toHaveBeenCalledTimes(1);
   });
 
   it('should throw TX_STATUS_UNKNOWN if polling attempts are exceeded without finding transaction', async () => {

@@ -66,8 +66,9 @@ export async function submitTransactionIdempotently(
 
 /**
  * Polls Horizon for the status of a transaction by its hash.
- * If not found, continues polling until the transaction's maxTime is reached,
- * or maxPollAttempts is exceeded.
+ * A matching successful:true record confirms execution; a matching
+ * successful:false record is terminal failure. Incomplete or mismatched
+ * records remain unknown. Query before classifying local timebound expiry.
  *
  * @param transaction - The transaction to check status for
  * @param options - Polling options (maxPollAttempts, pollIntervalMs)
@@ -93,35 +94,52 @@ export async function pollTransactionStatus(
   }
 
   for (let attempt = 1; attempt <= maxPollAttempts; attempt++) {
-    // Check if the transaction has expired based on local system time
-    if (maxTime && maxTime > 0n) {
+    // A past timeBound does not mean the payment failed: it could have been
+    // accepted before maxTime. Always query status before classifying expiry.
+    let confirmedNotFound = false;
+    try {
+      const txRecord = await server.transactions().transaction(txHash).call();
+      if (txRecord && typeof txRecord.hash === 'string' &&
+          txRecord.hash.toLowerCase() === txHash.toLowerCase()) {
+        if (txRecord.successful === true) {
+          return txRecord;
+        }
+        if (txRecord.successful === false) {
+          throw new PocketPayError(
+            'Transaction was included in a ledger but did not succeed.',
+            'TX_FAILED',
+            400,
+            undefined,
+            txHash,
+            false
+          );
+        }
+      }
+      // No matching hash AND explicit successful:true means no confirmation.
+      // A malformed record is unknown, never proof of success or absence.
+    } catch (error: any) {
+      // Only a real Horizon 404 supports timebound expiry classification.
+      // Timeouts, stale index snapshots and malformed results remain uncertain.
+      confirmedNotFound = error?.response?.status === 404 || error?.status === 404;
+      if (!confirmedNotFound) {
+        const classified = classifySubmitError(error, txHash);
+        if (classified.code !== 'TX_STATUS_UNKNOWN') {
+          throw classified;
+        }
+      }
+    }
+
+    if (confirmedNotFound && maxTime && maxTime > 0n) {
       const nowInSeconds = BigInt(Math.floor(Date.now() / 1000));
       if (nowInSeconds > maxTime) {
         throw new PocketPayError(
-          `Transaction expired on-chain (maxTime bounds exceeded: ${maxTime.toString()})`,
+          `Transaction timebound expired after a Horizon 404 (maxTime ${maxTime.toString()}); confirm finality before rebuilding.`,
           'TX_EXPIRED',
           400,
           undefined,
           txHash,
           false
         );
-      }
-    }
-
-    try {
-      // Query Horizon for the transaction details
-      const txRecord = await server.transactions().transaction(txHash).call();
-      if (txRecord) {
-        return txRecord;
-      }
-    } catch (error: any) {
-      // Horizon returns 404 (Not Found) if the transaction hasn't been included in a ledger yet.
-      const isNotFound = error?.response?.status === 404 || error?.status === 404;
-      if (!isNotFound) {
-        const classified = classifySubmitError(error, txHash);
-        if (classified.code !== 'TX_STATUS_UNKNOWN') {
-          throw classified;
-        }
       }
     }
 
