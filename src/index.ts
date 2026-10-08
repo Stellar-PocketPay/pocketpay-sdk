@@ -181,7 +181,10 @@ export {
   buildReceiptFromSubmission,
   buildReceiptFromSoroban,
   createPaymentIntent,
+  createPaymentIntentForRecipient,
   validatePaymentIntent,
+  validateRecipient,
+  normalizeRecipient,
   evaluateAssetState,
   checkPaymentIntentTrustline,
 } from './payments';
@@ -194,6 +197,17 @@ export type {
 } from './payments';
 
 export type { PaymentReceiptOptions } from './payments';
+
+export type {
+  RecipientInput,
+  SavedContactRecipient,
+  PaymentDestinationRecipient,
+  NormalizedRecipient,
+  RecipientSource,
+  RecipientValidationStatus,
+  RecipientValidationResult,
+  CreateRecipientPaymentIntentParams,
+} from './payments';
 
 export type {
   PaymentReceipt,

@@ -24,6 +24,7 @@ import {
 import { PocketPayError } from '../types';
 import { validateAmount, validateMemoInput, validatePublicKey } from '../utils';
 import { checkDestinationTrustline } from './trustline';
+import { normalizeRecipient, validateRecipient, type RecipientInput } from './recipient';
 
 /**
  * Evaluates the asset state classification for a given Asset.
@@ -95,6 +96,49 @@ export function createPaymentIntent(params: CreatePaymentIntentParams): PaymentI
   return intent;
 }
 
+export type CreateRecipientPaymentIntentParams =
+  Omit<CreatePaymentIntentParams, 'destination'> & {
+    recipient: RecipientInput;
+  };
+
+/**
+ * Creates a PaymentIntent from a typed recipient descriptor.
+ *
+ * Existing createPaymentIntent callers can continue passing a destination
+ * string directly. This helper adds saved-contact and destination-metadata
+ * inputs while ensuring the stored intent destination is always a canonical
+ * Stellar public key.
+ */
+export function createPaymentIntentForRecipient(
+  params: CreateRecipientPaymentIntentParams,
+): PaymentIntent {
+  if (!params || typeof params !== 'object') {
+    throw new PocketPayError('Invalid recipient payment intent params', 'INVALID_PAYMENT_INTENT', {
+      validation: { field: 'params', reason: 'invalid_object' },
+    });
+  }
+
+  const normalized = normalizeRecipient(params.recipient);
+  const { recipient: _recipient, metadata, memo, ...rest } = params;
+
+  const recipientMetadata = {
+    source: normalized.source,
+    ...(normalized.contactId ? { contactId: normalized.contactId } : {}),
+    ...(normalized.label ? { label: normalized.label } : {}),
+    ...(normalized.metadata ? { metadata: normalized.metadata } : {}),
+  };
+
+  return createPaymentIntent({
+    ...rest,
+    destination: normalized.publicKey,
+    memo: memo ?? normalized.memo,
+    metadata: {
+      ...metadata,
+      recipient: recipientMetadata,
+    },
+  });
+}
+
 /**
  * Performs preflight validation of a PaymentIntent.
  */
@@ -141,25 +185,16 @@ export function validatePaymentIntent(intent: PaymentIntent): PaymentIntentValid
     }
   }
 
-  // 2. Destination address check (Public key starting with G)
-  if (!intent.destination) {
+  // 2. Destination recipient check. Reuse recipient normalization so payment
+  // intents and recipient helpers share one Stellar address-validation path.
+  const recipientValidation = validateRecipient(intent.destination);
+  if (!recipientValidation.valid) {
     issues.push({
       field: 'destination',
-      code: 'INVALID_PUBLIC_KEY',
-      reason: 'missing',
-      message: 'Destination public key is required',
+      code: recipientValidation.code,
+      reason: recipientValidation.status,
+      message: recipientValidation.message,
     });
-  } else {
-    try {
-      validatePublicKey(intent.destination);
-    } catch (err) {
-      issues.push({
-        field: 'destination',
-        code: 'INVALID_PUBLIC_KEY',
-        reason: 'invalid_format',
-        message: err instanceof Error ? err.message : 'Invalid destination public key',
-      });
-    }
   }
 
   // 3. Amount check
