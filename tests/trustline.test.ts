@@ -176,6 +176,58 @@ describe('Trustline Validation Module', () => {
     });
   });
 
+  describe('issued-asset capacity precision', () => {
+    const maxLimit = '922337203685.4775807';
+    const oneUnitBelow = '922337203685.4775806';
+
+    it('accepts the last 7-decimal unit of a large trustline', async () => {
+      mockLoadAccount.mockResolvedValue({ balances: [{
+        asset_type: 'credit_alphanum4', asset_code: 'USDC', asset_issuer: validIssuer,
+        balance: oneUnitBelow, limit: maxLimit, is_authorized: true,
+      }] });
+      const result = await checkDestinationTrustline(
+        destPublicKey, { code: 'USDC', issuer: validIssuer }, { amount: '0.0000001' },
+      );
+      expect(result.valid).toBe(true);
+      expect(result.status).toBe('valid');
+      expect(result.availableCapacity).toBe('0.0000001');
+    });
+
+    it('rejects an amount exceeding that capacity by one 7-decimal unit', async () => {
+      mockLoadAccount.mockResolvedValue({ balances: [{
+        asset_type: 'credit_alphanum4', asset_code: 'USDC', asset_issuer: validIssuer,
+        balance: oneUnitBelow, limit: maxLimit, is_authorized: true,
+      }] });
+      const result = await checkDestinationTrustline(
+        destPublicKey, { code: 'USDC', issuer: validIssuer }, { amount: '0.0000002' },
+      );
+      expect(result.valid).toBe(false);
+      expect(result.status).toBe('limit_exceeded');
+      expect(result.availableCapacity).toBe('0.0000001');
+    });
+
+    it('fails closed when Horizon omits balance or limit even without an amount', async () => {
+      mockLoadAccount.mockResolvedValue({ balances: [{
+        asset_type: 'credit_alphanum4', asset_code: 'USDC', asset_issuer: validIssuer,
+        balance: '10.0000000', is_authorized: true,
+        // Horizon limit field is unexpectedly absent.
+      }] });
+      await expect(checkDestinationTrustline(
+        destPublicKey, { code: 'USDC', issuer: validIssuer },
+      )).rejects.toMatchObject({ code: 'TRUSTLINE_CHECK_ERROR' });
+    });
+
+    it('fails closed for invalid Horizon balance decimals rather than approving a payment', async () => {
+      mockLoadAccount.mockResolvedValue({ balances: [{
+        asset_type: 'credit_alphanum4', asset_code: 'USDC', asset_issuer: validIssuer,
+        balance: 'NaN', limit: '100.0000000', is_authorized: true,
+      }] });
+      await expect(checkDestinationTrustline(
+        destPublicKey, { code: 'USDC', issuer: validIssuer }, { amount: '1' },
+      )).rejects.toMatchObject({ code: 'TRUSTLINE_CHECK_ERROR' });
+    });
+  });
+
   describe('safeCheckDestinationTrustline', () => {
     it('returns PocketPayResult success when valid', async () => {
       mockLoadAccount.mockResolvedValue({

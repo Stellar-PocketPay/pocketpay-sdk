@@ -82,6 +82,7 @@ npm install @axionvera/pocketpay-sdk
 - [Wallet Secret Export Policy](./docs/wallet-secret-export.md) - Supported local-key access, unsupported export behaviour, security risks, and consumer responsibilities
 - [Soroban Vault](./docs/soroban-vault.md) - Savings vault helpers, configuration, and limitations
 - [Trustline Validation](./docs/trustline-validation.md) - Pre-flight trustline verification and issued asset payment safety
+- [Trustline Validation Design](./docs/trustline-validation-design.md) - Check contracts, failure states, exact decimal capacity and payment safety
 - [Issued Asset Payments](./docs/issued-asset-payments.md) - Full guide to sending issued assets: asset identifiers, trustline setup, `sendAsset`, validation rules, and error reference
 - [Multi-Asset Balance Model](./docs/multi-asset-balance-model.md) - Rich balance model for native XLM and issued credit assets with reserves and status taxonomy
 - [Asset Formatting Rules](./docs/asset-formatting.md) - Guidance for displaying native and issued asset codes, issuers, balances, decimals, unknown assets, and UX warnings safely

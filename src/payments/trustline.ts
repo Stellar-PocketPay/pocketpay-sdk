@@ -17,6 +17,26 @@ import {
 import { validatePublicKey, validateAmount, wrapError, toResult } from '../utils';
 import { withTimeout } from '../network';
 
+// Horizon exposes Stellar amounts as decimal strings with seven fractional digits.
+// Comparing them through Number/parseFloat loses stroop precision for large
+// issued-asset trustline limits, so all capacity checks use exact integers.
+const TRUSTLINE_SCALE = 10_000_000n;
+
+function parseHorizonUnits(value: unknown): bigint {
+  if (typeof value !== 'string' || !/^\d+(?:\.\d{1,7})?$/.test(value)) {
+    throw new PocketPayError(
+      'Cannot verify destination trustline capacity from the Horizon response',
+      'TRUSTLINE_CHECK_ERROR',
+    );
+  }
+  const [whole, fractional = ''] = value.split('.');
+  return BigInt(whole!) * TRUSTLINE_SCALE + BigInt(fractional.padEnd(7, '0'));
+}
+
+function formatHorizonUnits(units: bigint): string {
+  return `${units / TRUSTLINE_SCALE}.${(units % TRUSTLINE_SCALE).toString().padStart(7, '0')}`;
+}
+
 /**
  * Validates the format and parameters of a Stellar asset specification locally.
  *
@@ -146,8 +166,10 @@ export async function checkDestinationTrustline(
     }
 
     const balObj = matchingBalance as any;
-    const currentBalance = balObj.balance ?? '0';
-    const limit = balObj.limit ?? '0';
+    // An absent Horizon balance/limit is unknown, not a zero balance or
+    // an authorized empty trustline. Exact-unit parsing below fails closed.
+    const currentBalance = balObj.balance;
+    const limit = balObj.limit;
     const isAuthorized = balObj.is_authorized !== false && balObj.is_authorized_to_maintain_liabilities !== false;
 
     if (!isAuthorized) {
@@ -164,14 +186,16 @@ export async function checkDestinationTrustline(
       };
     }
 
-    const curNum = parseFloat(currentBalance);
-    const limitNum = parseFloat(limit);
-    const availableCapacityNum = Math.max(0, limitNum - curNum);
-    const availableCapacity = availableCapacityNum.toFixed(7);
+    const currentUnits = parseHorizonUnits(currentBalance);
+    const limitUnits = parseHorizonUnits(limit);
+    const availableUnits = limitUnits > currentUnits ? limitUnits - currentUnits : 0n;
+    const availableCapacity = formatHorizonUnits(availableUnits);
 
     if (options?.amount) {
-      const sendNum = parseFloat(options.amount);
-      if (sendNum > availableCapacityNum) {
+      // validateAmount above rejects non-decimal, zero and >7-digit fractions.
+      // Use the same exact scale as Horizon for the final authorization gate.
+      const sendUnits = parseHorizonUnits(options.amount);
+      if (sendUnits > availableUnits) {
         return {
           valid: false,
           status: 'limit_exceeded',
