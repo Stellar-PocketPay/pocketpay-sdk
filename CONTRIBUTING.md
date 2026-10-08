@@ -216,6 +216,24 @@ The self-review covers:
 
 ---
 
+## Acceptance Criteria Audit
+
+For issue-backed PRs, use the existing
+[Acceptance Criteria Audit Template](.github/checklists/acceptance-criteria.template.md)
+and attach a copy for the issue. Its expanded table separates each
+verbatim criterion from implementation evidence, test evidence,
+documentation impact, and completion status.
+
+Include every issue requirement. For incomplete items, describe the gap,
+follow-up owner and whether acceptance must wait. Distinguish authored
+tests from tests actually executed. Use the current PR head and genuine
+CI status. The PR template includes the same five-column audit.
+
+A completed form supports review; reward eligibility and payment are
+separate decisions.
+
+---
+
 ## Contribution Quality Gate
 
 Maintainers use the [Contribution Quality Gate](./docs/contribution-quality-gate.md) before approving issue PRs. It is a repeatable checklist covering:

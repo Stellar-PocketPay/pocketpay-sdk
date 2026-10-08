@@ -46,12 +46,16 @@
 
 ## Acceptance Criteria Coverage
 
-<!-- Map the issue's acceptance criteria to what you did using a Traceability Table. 
-     See docs/acceptance-criteria-traceability.md for instructions and examples. -->
+<!-- Copy EVERY issue acceptance criterion verbatim. Evidence from this exact
+     PR head only. See .github/checklists/acceptance-criteria.template.md and
+     docs/acceptance-criteria-traceability.md. Give incomplete rows a reason. -->
 
-| Criterion | Status | Evidence / Location |
-| :--- | :---: | :--- |
-| (Copy from issue) | ⬜ Pending | (Link to code/tests or explain why skipped) |
+| Criterion | Implementation evidence | Test evidence or justified N/A | Documentation impact | Status |
+| --- | --- | --- | --- | --- |
+| (Exact issue criterion) | (Changed source path/behavior) | (Case and observed result, or N/A reason) | (Docs path or N/A) | Complete / Partial / Blocked |
+
+<!-- Explain all non-Complete rows with remaining work, owner/follow-up issue,
+     and whether the gap blocks this issue's acceptance. -->
 
 ## Contributor Self-Review
 

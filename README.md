@@ -55,6 +55,7 @@ npm install @axionvera/pocketpay-sdk
 - [Test-First Contribution Guide](./docs/test-first-guide.md) - Per-module test examples, happy/negative-path expectations, no-test justification rules, and local commands
 - [Pre-PR Verification](./docs/pre-pr-verification.md) - Run `npm run verify:pr` before opening a pull request to confirm tests, docs, CI, and issue acceptance criteria
 - [Acceptance Criteria Traceability](./docs/acceptance-criteria-traceability.md) - Format for mapping SDK changes to issue criteria in PRs
+- [Acceptance Criteria Audit Form](./.github/checklists/acceptance-criteria.template.md) - Copy-ready five-column issue-criteria checklist covering implementation, test, docs, status, and incomplete items
 - [Pre-submission Verification](./docs/pre-submission-verification.md) - Run `npm run presubmit` before submitting a PR (lint, tests, coverage, build)
 - [Contribution Quality Gate](./docs/contribution-quality-gate.md) - Maintainer checklist and examples of incomplete vs acceptable issue work before approval
 - [Getting Started](./docs/getting-started.md) - Step-by-step guide to install, create wallets, fund accounts, check balances, and send payments
