@@ -518,3 +518,24 @@ export {
   // Security helpers
   redactSensitive,
 } from './utils';
+
+
+// ─── Account activity normalisation / history model (issue #278) ────────────
+export {
+  mapPaymentSummaryToActivity,
+  mapTransactionSummaryToActivity,
+  mapPaymentReceiptToActivity,
+  mapVaultResultToActivity,
+  normalizeAccountActivity,
+  filterAccountActivity,
+} from './account';
+
+export type {
+  AccountActivityKind,
+  AccountActivityDirection,
+  AccountActivitySource,
+  AccountActivityRecord,
+  AccountActivityFilter,
+  VaultActivityInput,
+  NormalizeAccountActivityInput,
+} from './account';

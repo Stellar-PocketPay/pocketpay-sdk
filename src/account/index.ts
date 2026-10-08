@@ -62,3 +62,24 @@ export {
 } from './sequence';
 
 export type { SequenceSnapshot, SequenceProviderOptions } from './sequence';
+
+
+// ─── Account activity normalisation (issue #278) ────────────────────────────
+export {
+  mapPaymentSummaryToActivity,
+  mapTransactionSummaryToActivity,
+  mapPaymentReceiptToActivity,
+  mapVaultResultToActivity,
+  normalizeAccountActivity,
+  filterAccountActivity,
+} from './activity';
+
+export type {
+  AccountActivityKind,
+  AccountActivityDirection,
+  AccountActivitySource,
+  AccountActivityRecord,
+  AccountActivityFilter,
+  VaultActivityInput,
+  NormalizeAccountActivityInput,
+} from './activity';
