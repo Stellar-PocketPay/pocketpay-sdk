@@ -853,6 +853,15 @@ export async function submitSignedTransaction(
   signed: SignedTransaction,
   config?: Partial<SDKConfig>,
 ): Promise<SubmissionResult> {
+  if (signed.transaction.signatures.length === 0) {
+    return {
+      success: false,
+      hash: signed.hash,
+      error: ERROR_CODES[ErrorCode.TX_UNSIGNED].safeMessage,
+      errorCode: ErrorCode.TX_UNSIGNED,
+    };
+  }
+
   const cfg = resolveConfig(config);
   const server = getHorizonServer(config);
 
