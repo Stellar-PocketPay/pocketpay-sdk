@@ -376,3 +376,6 @@ export type {
   TransactionBuildInput,
   TransactionValidationOptions,
 } from './build-validation';
+
+// ─── Transaction polling strategy (issue #333) ───────────────────────────────
+export { pollTransaction } from './polling';

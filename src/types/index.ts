@@ -448,8 +448,16 @@ export interface FilterTransactionsOptions {
 
 // ─── Transaction Polling ───────────────────────────────────────────────────
 
-/** Status of a polled transaction */
+/**
+ * Backwards-compatible completion status for transaction polling.
+ *
+ * `timeout` describes why polling stopped; inspect `state` to distinguish
+ * a transaction that was still pending from one whose status remained unknown.
+ */
 export type TransactionPollStatus = 'success' | 'failure' | 'timeout' | 'unknown';
+
+/** Last ledger state observed while polling. */
+export type TransactionPollState = 'confirmed' | 'failed' | 'pending' | 'unknown';
 
 /** Configuration for polling a transaction */
 export interface TransactionPollConfig {
@@ -457,14 +465,28 @@ export interface TransactionPollConfig {
   interval?: number;
   /** Maximum time to wait in milliseconds (default: 30000) */
   timeout?: number;
+  /**
+   * Maximum number of Horizon lookups. When omitted, the SDK derives a bound
+   * from `timeout / interval` so the time-based behaviour remains unchanged.
+   */
+  maxAttempts?: number;
+  /**
+   * Optional cooperative cancellation signal. Aborting rejects with an Error
+   * whose `name` is `AbortError`.
+   */
+  signal?: AbortSignal;
 }
 
 /** Result of a transaction poll */
 export interface TransactionPollResult {
-  /** Final status of the transaction */
+  /** Backwards-compatible completion status. */
   status: TransactionPollStatus;
+  /** Last ledger state observed. */
+  state: TransactionPollState;
   /** Transaction hash */
   hash: string;
+  /** Number of Horizon status lookups performed. */
+  attempts: number;
   /** Transaction record if it was found */
   transaction?: TransactionRecord;
   /** Error details if applicable */

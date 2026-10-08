@@ -37,6 +37,10 @@ export type {
   TransactionSummary,
   TransactionRecord,
   TransactionList,
+  TransactionPollStatus,
+  TransactionPollState,
+  TransactionPollConfig,
+  TransactionPollResult,
   FilterableTransaction,
   FilterTransactionsOptions,
   SortableTransaction,
@@ -243,6 +247,7 @@ export {
   filterByDateRange,
   filterByCounterparty,
   sortTransactionsByDate,
+  pollTransaction,
   safeGetTransactions,
   safeGetPayments,
   // ─── Transaction Fixtures ──────────────────────────────────────────────────
