@@ -544,6 +544,7 @@ export {
   validateMemoInput,
   safeValidateMemo,
   normalizeMemo,
+  formatMemoForDisplay,
   buildMemo,
   MEMO_TEXT_MAX_BYTES,
   MEMO_HASH_HEX_LENGTH,

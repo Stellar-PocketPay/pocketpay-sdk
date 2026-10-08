@@ -46,12 +46,13 @@ export const SUPPORTED_MEMO_TYPES: readonly MemoType[] = [
 const HEX_PATTERN = /^[0-9a-fA-F]+$/;
 
 /** Builds the typed error used for every memo failure. */
-function memoError(reason: string, message: string, value?: string): PocketPayError {
+function memoError(reason: string, message: string): PocketPayError {
   const spec = ERROR_CODES[ErrorCode.TX_INVALID_MEMO];
   return new PocketPayError(message, ErrorCode.TX_INVALID_MEMO, {
     category: spec.category,
     safeMessage: spec.safeMessage,
-    validation: { field: 'memo', reason, value },
+    // A failed validation must not copy untrusted memo text into logs or UI error metadata.
+    validation: { field: 'memo', reason },
   });
 }
 
@@ -101,13 +102,18 @@ export function validateMemoInput(memo?: string | MemoInput): boolean {
   if (!SUPPORTED_MEMO_TYPES.includes(type)) {
     throw memoError(
       'unsupported_type',
-      `Unsupported memo type: "${type}". Supported types: ${SUPPORTED_MEMO_TYPES.join(', ')}.`,
-      String(type)
+      `Unsupported memo type. Supported types: ${SUPPORTED_MEMO_TYPES.join(', ')}.`
     );
   }
 
   switch (type) {
     case 'none':
+      if (value !== undefined) {
+        throw memoError(
+          'unexpected_payload',
+          'A none memo must not include a value.'
+        );
+      }
       return true;
 
     case 'text': {
@@ -118,8 +124,7 @@ export function validateMemoInput(memo?: string | MemoInput): boolean {
       if (byteLength > MEMO_TEXT_MAX_BYTES) {
         throw memoError(
           'too_long',
-          `Memo text exceeds ${MEMO_TEXT_MAX_BYTES}-byte limit (got ${byteLength} bytes): "${value}"`,
-          value
+          `Memo text exceeds ${MEMO_TEXT_MAX_BYTES}-byte limit (got ${byteLength} bytes).`
         );
       }
       return true;
@@ -129,19 +134,23 @@ export function validateMemoInput(memo?: string | MemoInput): boolean {
       if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'bigint') {
         throw memoError('invalid_type', 'An id memo requires a string, number, or bigint value.');
       }
-      const raw = String(value).trim();
+      if (typeof value === 'number' && !Number.isSafeInteger(value)) {
+        throw memoError(
+          'unsafe_number',
+          'An id memo number must be a safe JavaScript integer; pass larger IDs as a decimal string or bigint.'
+        );
+      }
+      const raw = String(value);
       if (!/^\d+$/.test(raw)) {
         throw memoError(
           'not_unsigned_integer',
-          `An id memo must be an unsigned 64-bit integer, got "${raw}".`,
-          raw
+          'An id memo must be an unsigned 64-bit integer.'
         );
       }
       if (BigInt(raw) > MEMO_ID_MAX) {
         throw memoError(
           'out_of_range',
-          `An id memo must not exceed ${MEMO_ID_MAX} (2^64 - 1), got "${raw}".`,
-          raw
+          `An id memo must not exceed ${MEMO_ID_MAX} (2^64 - 1).`
         );
       }
       return true;
@@ -156,15 +165,13 @@ export function validateMemoInput(memo?: string | MemoInput): boolean {
         throw memoError(
           'invalid_length',
           `A ${type} memo must be ${MEMO_HASH_HEX_LENGTH} hex characters (32 bytes), ` +
-            `got ${value.length}.`,
-          value
+            `got ${value.length}.`
         );
       }
       if (!HEX_PATTERN.test(value)) {
         throw memoError(
           'not_hexadecimal',
-          `A ${type} memo must contain only hexadecimal characters.`,
-          value
+          `A ${type} memo must contain only hexadecimal characters.`
         );
       }
       return true;
@@ -197,7 +204,7 @@ export function buildMemo(memo?: string | MemoInput): StellarSDK.Memo | undefine
     case 'text':
       return StellarSDK.Memo.text(String(normalized.value));
     case 'id':
-      return StellarSDK.Memo.id(String(normalized.value).trim());
+      return StellarSDK.Memo.id(String(normalized.value));
     case 'hash':
       return StellarSDK.Memo.hash(String(normalized.value));
     case 'return':
@@ -224,4 +231,71 @@ export function safeValidateMemo(
     if (error instanceof PocketPayError) return { valid: false, error };
     throw error;
   }
+}
+
+/**
+ * Formats a validated memo for safe, single-line display.
+ *
+ * Text memos are JSON-escaped without the surrounding quotes so control
+ * characters, quotes, and backslashes cannot alter the surrounding UI/log
+ * line. Non-text memo payloads are already restricted to display-safe scalar
+ * forms by {@link validateMemoInput} and are returned unchanged as strings.
+ *
+ * @param memo - A memo string, structured memo, or undefined
+ * @returns A display-safe string, or undefined when there is no memo
+ * @throws PocketPayError with code `TX_INVALID_MEMO` when the memo is invalid
+ */
+export function formatMemoForDisplay(memo?: string | MemoInput): string | undefined {
+  const normalized = normalizeMemo(memo);
+  if (!normalized) return undefined;
+
+  validateMemoInput(normalized);
+  if (normalized.type === 'none') return undefined;
+
+  const value = String(normalized.value ?? '');
+  if (normalized.type !== 'text') return value;
+
+  return JSON.stringify(value).slice(1, -1)
+    .replace(/\u0085/g, '\\u0085')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+    // JSON.stringify does not escape bidi formatting marks; render them as ASCII
+    // escapes to keep memo text from visually reordering adjacent UI labels.
+    .replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, (mark) =>
+      '\\u' + mark.charCodeAt(0).toString(16).padStart(4, '0')
+    );
+}
+
+/**
+ * Normalizes a memo returned by Horizon into the SDK's display representation.
+ *
+ * Horizon serializes hash and return memos as base64, while SDK callers supply
+ * those same 32-byte payloads as 64 hexadecimal characters. Convert valid
+ * Horizon binary memos back to canonical lowercase hex so a transaction reads
+ * the same before submission and after fetching it from Horizon.
+ *
+ * Unknown or malformed upstream memo shapes are preserved rather than making a
+ * transaction-history page fail as a whole.
+ */
+export function formatHorizonMemoForDisplay(
+  memoType: string | undefined,
+  memo: string | undefined
+): string | undefined {
+  if (memoType === undefined || memoType === 'none' || memo === undefined) {
+    return undefined;
+  }
+
+  if (memoType === 'text' || memoType === 'id') {
+    return formatMemoForDisplay({ type: memoType, value: memo });
+  }
+
+  if (memoType === 'hash' || memoType === 'return') {
+    const bytes = Buffer.from(memo, 'base64');
+    if (bytes.length !== 32 || bytes.toString('base64') !== memo) {
+      return memo;
+    }
+    return formatMemoForDisplay({ type: memoType, value: bytes.toString('hex') });
+  }
+
+  return memo;
 }

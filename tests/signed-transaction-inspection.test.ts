@@ -134,9 +134,11 @@ describe('summary includes useful metadata', () => {
 });
 
 describe('memo reporting carries its type', () => {
-  it('reports a text memo', () => {
-    const summary = inspectSignedTransaction(build({ memo: StellarSDK.Memo.text('invoice 42') }));
-    expect(summary.memo).toBe('invoice 42');
+  it('reports a display-safe text memo', () => {
+    const summary = inspectSignedTransaction(
+      build({ memo: StellarSDK.Memo.text('invoice\n42\u202e') })
+    );
+    expect(summary.memo).toBe('invoice\\n42\\u202e');
     expect(summary.memoType).toBe('text');
   });
 

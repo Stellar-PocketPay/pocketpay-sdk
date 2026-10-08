@@ -188,7 +188,8 @@ export interface MemoInput {
   type: MemoType;
   /**
    * The payload. Required for every type except `none`. `id` accepts a
-   * decimal string, number, or bigint; `hash` and `return` take 64 hex chars.
+   * decimal string, bigint, or a number within JavaScript's safe-integer range;
+   * `hash` and `return` take 64 hex chars.
    */
   value?: string | number | bigint;
 }

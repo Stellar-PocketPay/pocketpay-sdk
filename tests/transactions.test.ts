@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getTransactions, getPayments, createWallet, PocketPayError } from '../src';
+import { mapTransactionToSummary } from '../src/transactions';
 
 // ─── Mock @stellar/stellar-sdk ───────────────────────────────────────────────
 // Stub Horizon.Server so the transaction/payment builder chain is controllable
@@ -147,6 +148,79 @@ describe('Transactions Module - getTransactions', () => {
     mockTxCall.mockResolvedValue(makeHorizonTxPage());
     const result = await getTransactions(account);
     expect(result.records[1].memo).toBeUndefined();
+  });
+
+  it('safe-formats Horizon text memos and preserves their type across history mappers', async () => {
+    const page = makeHorizonTxPage();
+    page.records[0].memo = 'line1\nline2\u202e';
+    mockTxCall.mockResolvedValue(page);
+
+    const history = await getTransactions(account);
+    expect(history.records[0]).toMatchObject({
+      memo: 'line1\\nline2\\u202e',
+      memoType: 'text',
+    });
+
+    const summary = mapTransactionToSummary(
+      {
+        id: 'tx-id',
+        paging_token: '123',
+        tx_hash: 'txhash',
+        created_at: '2024-01-15T10:30:00Z',
+        source_account: account,
+        fee_account: account,
+        fee_charged: '100',
+        memo_type: 'text',
+        memo: 'line1\nline2\u202e',
+        successful: true,
+        operations: [],
+      },
+      { userAccount: account },
+    );
+
+    expect(summary).toMatchObject({
+      memo: 'line1\\nline2\\u202e',
+      memoType: 'text',
+    });
+  });
+
+  it('normalizes Horizon hash and return memos to canonical hex across history mappers', async () => {
+    const binaryMemo = Buffer.from(Array.from({ length: 32 }, (_, index) => index));
+    const horizonMemo = binaryMemo.toString('base64');
+    const canonicalHex = binaryMemo.toString('hex');
+
+    const page = makeHorizonTxPage();
+    page.records[0].memo_type = 'hash';
+    page.records[0].memo = horizonMemo;
+    mockTxCall.mockResolvedValue(page);
+
+    const history = await getTransactions(account);
+    expect(history.records[0]).toMatchObject({
+      memo: canonicalHex,
+      memoType: 'hash',
+    });
+
+    const summary = mapTransactionToSummary(
+      {
+        id: 'tx-id',
+        paging_token: '123',
+        tx_hash: 'txhash',
+        created_at: '2024-01-15T10:30:00Z',
+        source_account: account,
+        fee_account: account,
+        fee_charged: '100',
+        memo_type: 'return',
+        memo: horizonMemo,
+        successful: true,
+        operations: [],
+      },
+      { userAccount: account },
+    );
+
+    expect(summary).toMatchObject({
+      memo: canonicalHex,
+      memoType: 'return',
+    });
   });
 
   it('sets nextCursor to the last record paging token', async () => {

@@ -12,7 +12,7 @@ Stellar defines five memo types. All five are validated; four carry a payload.
 | --- | --- | --- |
 | `none` | — | No memo is attached. |
 | `text` | UTF-8 string | Up to **28 bytes**. Multi-byte characters count for more than one byte each. |
-| `id` | unsigned 64-bit integer | Decimal digits only, `0` to `18446744073709551615` (2⁶⁴−1). Accepts a string, number, or bigint. |
+| `id` | unsigned 64-bit integer | Decimal digits only, `0` to `18446744073709551615` (2⁶⁴−1). Strings and bigint support the full range; number inputs must satisfy `Number.isSafeInteger`. |
 | `hash` | 32 bytes | Exactly **64 hexadecimal characters**. Case-insensitive. |
 | `return` | 32 bytes | Exactly **64 hexadecimal characters**. Case-insensitive. |
 
@@ -78,9 +78,11 @@ The `validation.reason` field says which rule was broken:
 
 | `reason` | Meaning |
 | --- | --- |
+| `unexpected_payload` | A `none` memo included a value even though this memo type carries no payload. The invalid payload is not echoed into the validation error metadata. |
 | `unsupported_type` | The `type` is not one of the five Stellar memo types. |
 | `too_long` | A `text` memo exceeds 28 bytes. |
 | `not_unsigned_integer` | An `id` memo is negative, fractional, or not numeric. |
+| `unsafe_number` | An `id` memo was passed as a JavaScript number outside the safe-integer range; use a decimal string or bigint instead. |
 | `out_of_range` | An `id` memo exceeds 2⁶⁴−1. |
 | `invalid_length` | A `hash` or `return` memo is not 64 hex characters. |
 | `not_hexadecimal` | A `hash` or `return` memo contains non-hex characters. |
@@ -102,6 +104,24 @@ const preview = await previewPayment({ ...params, memo: { type: 'id', value: '12
 preview.memo;     // '12345'
 preview.memoType; // 'id'
 ```
+
+### Safe display formatting
+
+Use `formatMemoForDisplay(memo)` when rendering a memo in a single-line UI,
+log, or confirmation surface. It normalizes and validates the memo first.
+Text memos JSON-escape control characters, quotes, and backslashes without
+adding surrounding quotes; Unicode NEXT LINE (U+0085), LINE SEPARATOR (U+2028)
+and PARAGRAPH SEPARATOR (U+2029) are also escaped for single-line display.
+Bidirectional controls (U+061C, U+200E–U+200F, U+202A–U+202E,
+U+2066–U+2069) are rendered as literal `\uNNNN` escapes so
+memo text cannot visually reorder adjacent display labels. This does not
+sanitize memo text for HTML injection.
+`id`, `hash`, and `return` payloads are returned
+as their validated string values. Missing or `none` memos return `undefined`.
+
+`previewPayment` uses this helper for its display-only `memo` field. This does
+not change the memo attached to a transaction: transaction construction still
+uses `buildMemo` and the original validated payload.
 
 ## Migration
 

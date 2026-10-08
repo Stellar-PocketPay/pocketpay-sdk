@@ -27,6 +27,7 @@ import { PocketPayError } from '../types';
 import type { MemoType } from '../types';
 import { ErrorCode, ERROR_CODES } from '../errors/codes';
 import { formatStroops } from '../utils/amount';
+import { formatMemoForDisplay } from '../utils/memo';
 
 /** A signature present on the envelope, described without exposing it. */
 export interface SignatureSummary {
@@ -139,6 +140,10 @@ function summariseMemo(
       memoType === 'hash' || memoType === 'return'
         ? (value as Buffer).toString('hex')
         : (value as Buffer).toString('utf-8');
+  }
+
+  if (memoType === 'text' && rendered !== undefined) {
+    rendered = formatMemoForDisplay({ type: 'text', value: rendered });
   }
 
   return { memo: rendered, memoType };
