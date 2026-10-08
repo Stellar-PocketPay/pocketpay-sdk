@@ -334,6 +334,14 @@ export type {
   VaultActionReadiness,
 } from './vault';
 
+export { buildVaultOperationPreview } from './vault';
+
+export type {
+  VaultPreviewAction,
+  VaultOperationPreviewParams,
+  VaultOperationPreview,
+} from './vault';
+
 // ─── Network & Idempotency ──────────────────────────────────────────────────
 export {
   submitTransactionIdempotently,

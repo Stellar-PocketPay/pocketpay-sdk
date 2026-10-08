@@ -320,7 +320,10 @@ export function assertFeatureEnabled(
  * @returns Fully resolved and validated SDK configuration with config source metadata
  * @throws PocketPayError if any configuration value is invalid
  */
-export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig {
+function resolveConfigInternal(
+  overrides: Partial<SDKConfig> | undefined,
+  emitDiagnostics: boolean,
+): ResolvedSDKConfig {
   const networkSource: ConfigSource =
     overrides?.network !== undefined
       ? 'override'
@@ -419,18 +422,39 @@ export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig
     sources,
   };
 
-  emitDiagnosticsEvent('config', 'config.resolved', {
-    network: resolved.network,
-    horizonUrl: resolved.horizonUrl,
-    sorobanRpcUrl: resolved.sorobanRpcUrl,
-    timeoutMs: resolved.timeout,
-    contractIdConfigured:
-      typeof resolved.contractId === 'string' && resolved.contractId.length > 0,
-    sources: resolved.sources,
-    featureFlags: resolved.featureFlags,
-  });
+  if (emitDiagnostics) {
+    emitDiagnosticsEvent('config', 'config.resolved', {
+      network: resolved.network,
+      horizonUrl: resolved.horizonUrl,
+      sorobanRpcUrl: resolved.sorobanRpcUrl,
+      timeoutMs: resolved.timeout,
+      contractIdConfigured:
+        typeof resolved.contractId === 'string' && resolved.contractId.length > 0,
+      sources: resolved.sources,
+      featureFlags: resolved.featureFlags,
+    });
+  }
 
   return resolved;
+}
+
+/**
+ * Resolve SDK configuration and emit the normal redacted diagnostics snapshot.
+ */
+export function resolveConfig(overrides?: Partial<SDKConfig>): ResolvedSDKConfig {
+  return resolveConfigInternal(overrides, true);
+}
+
+/**
+ * Resolve SDK configuration without notifying diagnostics hooks.
+ *
+ * Internal review/preview paths use this when configuration must be validated
+ * without creating observer-visible side effects.
+ */
+export function resolveConfigWithoutDiagnostics(
+  overrides?: Partial<SDKConfig>,
+): ResolvedSDKConfig {
+  return resolveConfigInternal(overrides, false);
 }
 
 /**

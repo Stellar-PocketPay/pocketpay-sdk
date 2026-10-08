@@ -46,3 +46,11 @@ export type {
   SorobanInvocationResult,
   SorobanInvocationMapperOptions,
 } from '../types';
+
+export { buildVaultOperationPreview } from './preview';
+
+export type {
+  VaultPreviewAction,
+  VaultOperationPreviewParams,
+  VaultOperationPreview,
+} from './preview';
