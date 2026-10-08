@@ -454,6 +454,8 @@ export type {
   AccountAbstraction,
   ReadOnlyAccount,
   SigningAccount,
+  AccountCapabilitySnapshot,
+  AccountSubmissionTransport,
 } from './account';
 
 export {
@@ -464,6 +466,8 @@ export {
   createAccountWithSigner,
   // Capability check: type guard narrowing AccountAbstraction to SigningAccount
   canSignTransaction,
+  getAccountCapabilities,
+  hasSubmissionTransport,
 } from './account';
 
 // ─── Utils ──────────────────────────────────────────────────────────────────

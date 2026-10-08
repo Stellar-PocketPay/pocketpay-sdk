@@ -41,6 +41,8 @@ export type {
 
 // ─── Capability check ─────────────────────────────────────────────────────────
 export { canSignTransaction } from './types';
+export { getAccountCapabilities, hasSubmissionTransport } from './capabilities';
+export type { AccountCapabilitySnapshot, AccountSubmissionTransport } from './capabilities';
 
 // ─── Signer implementations ──────────────────────────────────────────────────
 export { LocalSigner, createLocalSigner } from './signer';

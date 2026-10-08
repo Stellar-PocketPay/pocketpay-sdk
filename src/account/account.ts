@@ -23,6 +23,19 @@ import { ErrorCategory, ErrorCode, ERROR_CODES } from '../errors';
 import { LocalSigner } from './signer';
 import type { AccountAbstraction, AccountIdentity, ReadOnlyAccount, Signer, SigningAccount } from './types';
 
+/** Reuse the SDK's typed signer-mismatch contract without exposing key material. */
+function signerIdentityMismatch(): PocketPayError {
+  return new PocketPayError(
+    'Signer public key does not match the account identity.',
+    ErrorCode.TX_SIGNER_MISMATCH,
+    {
+      category: ErrorCategory.Transaction,
+      safeMessage: ERROR_CODES[ErrorCode.TX_SIGNER_MISMATCH].safeMessage,
+      validation: { field: 'signer', reason: 'public_key_mismatch' },
+    },
+  );
+}
+
 // ─── Concrete implementation ─────────────────────────────────────────────────
 
 /**
@@ -66,6 +79,9 @@ class AccountAbstractionImpl {
           validation: { field: 'account', reason: 'no_signer_attached' },
         },
       );
+    }
+    if (this.signer.publicKey !== this.identity.publicKey) {
+      throw signerIdentityMismatch();
     }
     return this.signer.sign(transaction, networkPassphrase);
   }
@@ -161,6 +177,9 @@ export function createAccountWithSigner(
   signer?: Signer,
 ): AccountAbstraction {
   validatePublicKey(identity.publicKey);
+  if (signer && signer.publicKey !== identity.publicKey) {
+    throw signerIdentityMismatch();
+  }
   const account = new AccountAbstractionImpl(identity, signer);
   // The branch is determined by whether `signer` was actually supplied.
   return signer
