@@ -115,6 +115,26 @@ There is no third, signer-specific "unsupported capability" code. Instead,
 "this signing method isn't supported yet" reuses the SDK's existing
 unsupported-feature/capability standard — see the next section.
 
+## Binding an external signer to its account identity
+
+When constructing an account with createAccountWithSigner(identity, signer),
+the supplied signer's publicKey **must match** identity.publicKey.
+A mismatched signer fails immediately with a PocketPayError whose code is
+TX_SIGNER_MISMATCH; the signer is never invoked. This is separate from
+validating that identity.publicKey has the correct Stellar address format.
+
+External signers may change their selected key after attachment (for example
+when a hardware device switches accounts). AccountAbstraction.sign() checks
+the signer's current publicKey against the attached account identity **again,
+immediately before calling** signer.sign(). A mismatch returns the same typed
+error without asking the now-wrong signer to sign. Reattaching an account is
+required if the intended public identity changes.
+
+This is a key-consistency boundary, not proof that arbitrary third-party
+signer implementations possess the private key they advertise. An adapter is
+responsible for verifying its device identity and binding the actual signature
+to that key. Callers can continue to use read-only accounts without a signer.
+
 ## External signer adapters — the extension point
 
 `ExternalSignerAdapter` (in `src/account/types.ts`) is a **contract only** —

@@ -24,6 +24,7 @@ import {
   createLocalSigner,
   // Error type for negative-path tests
   PocketPayError,
+  ErrorCode,
   // Root-level re-exports to confirm wiring
   createWallet,
 } from '../src';
@@ -310,6 +311,56 @@ describe('createAccountWithSigner()', () => {
 
     await account.sign(tx, StellarSDK.Networks.TESTNET);
     expect(signSpy).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a signer for a different account identity before attachment', () => {
+    const wrongSigner = {
+      publicKey: OTHER_PUBLIC,
+      sign: vi.fn(async (transaction: StellarSDK.Transaction | StellarSDK.FeeBumpTransaction) => transaction),
+    };
+
+    let error: unknown;
+    try {
+      createAccountWithSigner({ publicKey: TEST_PUBLIC }, wrongSigner);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(PocketPayError);
+    expect(error).toMatchObject({ code: ErrorCode.TX_SIGNER_MISMATCH });
+    expect(wrongSigner.sign).not.toHaveBeenCalled();
+  });
+
+  it('snapshots the supplied identity so caller mutation cannot drift the account', () => {
+    const identity = { publicKey: TEST_PUBLIC };
+    const signer = createLocalSigner(TEST_SECRET);
+    const account = createAccountWithSigner(identity, signer);
+
+    identity.publicKey = OTHER_PUBLIC;
+
+    expect(account.publicKey).toBe(TEST_PUBLIC);
+    expect(account.identity.publicKey).toBe(TEST_PUBLIC);
+    expect(Object.isFrozen(account.identity)).toBe(true);
+    expect(Reflect.set(account.identity as object, 'publicKey', OTHER_PUBLIC)).toBe(false);
+    expect(account.publicKey).toBe(TEST_PUBLIC);
+  });
+
+  it('rechecks external signer identity before each sign call', async () => {
+    const externalSigner = {
+      publicKey: TEST_PUBLIC,
+      sign: vi.fn(async (transaction: StellarSDK.Transaction | StellarSDK.FeeBumpTransaction) => transaction),
+    };
+    const account = createAccountWithSigner({ publicKey: TEST_PUBLIC }, externalSigner);
+    const transaction = {} as StellarSDK.Transaction;
+
+    externalSigner.publicKey = OTHER_PUBLIC;
+    await expect(account.sign(transaction, StellarSDK.Networks.TESTNET)).rejects.toMatchObject({
+      code: ErrorCode.TX_SIGNER_MISMATCH,
+    });
+    expect(externalSigner.sign).not.toHaveBeenCalled();
+
+    externalSigner.publicKey = TEST_PUBLIC;
+    await expect(account.sign(transaction, StellarSDK.Networks.TESTNET)).resolves.toBe(transaction);
+    expect(externalSigner.sign).toHaveBeenCalledOnce();
   });
 
   it('rejects an invalid public key in the identity', () => {

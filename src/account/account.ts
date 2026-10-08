@@ -25,6 +25,23 @@ import type { AccountAbstraction, AccountIdentity, ReadOnlyAccount, Signer, Sign
 
 // ─── Concrete implementation ─────────────────────────────────────────────────
 
+// A caller-provided signer must authorize the identity the account advertises.
+// Enforce this both when attaching the signer and at signing time: external
+// signers can switch accounts after they have been attached.
+function assertSignerMatchesIdentity(identity: AccountIdentity, signer: Signer): void {
+  if (signer.publicKey !== identity.publicKey) {
+    throw new PocketPayError(
+      'The attached signer does not match this account identity.',
+      ErrorCode.TX_SIGNER_MISMATCH,
+      {
+        category: ErrorCategory.Transaction,
+        safeMessage: ERROR_CODES[ErrorCode.TX_SIGNER_MISMATCH].safeMessage,
+        validation: { field: 'signer', reason: 'signer_identity_mismatch' },
+      },
+    );
+  }
+}
+
 /**
  * Concrete implementation shared by both branches of `AccountAbstraction`.
  *
@@ -39,7 +56,11 @@ class AccountAbstractionImpl {
   readonly signer: Signer | undefined;
 
   constructor(identity: AccountIdentity, signer?: Signer) {
-    this.identity = identity;
+    // Snapshot the validated identity so a caller retaining the input object
+    // cannot mutate the account's advertised public key after attachment.
+    // Freeze the internal snapshot as a runtime counterpart to AccountIdentity's
+    // readonly TypeScript contract.
+    this.identity = Object.freeze({ publicKey: identity.publicKey });
     this.signer = signer;
   }
 
@@ -67,6 +88,7 @@ class AccountAbstractionImpl {
         },
       );
     }
+    assertSignerMatchesIdentity(this.identity, this.signer);
     return this.signer.sign(transaction, networkPassphrase);
   }
 }
@@ -161,6 +183,9 @@ export function createAccountWithSigner(
   signer?: Signer,
 ): AccountAbstraction {
   validatePublicKey(identity.publicKey);
+  if (signer !== undefined) {
+    assertSignerMatchesIdentity(identity, signer);
+  }
   const account = new AccountAbstractionImpl(identity, signer);
   // The branch is determined by whether `signer` was actually supplied.
   return signer
