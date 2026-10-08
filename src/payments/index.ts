@@ -263,7 +263,8 @@ export type {
 export {
   validateSendXLMParams,
 } from './validation';
-export { parseQRPayload, QRPayload, QRParseResult } from './qrParser';
+export { parseQRPayload } from './qrParser';
+export type { QRPayload } from './qrParser';
 export type {
   ValidationError,
   ValidationErrorCode,

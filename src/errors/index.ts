@@ -1,4 +1,5 @@
 export type { ResultWarning, RecoveryHint } from '../types';
+export { PaymentParseError, PaymentErrorCode } from './payment-errors';
 
 // ─── Error Classification ───────────────────────────────────────────────────
 

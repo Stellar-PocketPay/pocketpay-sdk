@@ -20,7 +20,7 @@ WalletKeypair,
 } from '../src';
 
 const REQUIRED_PUBLIC_EXPORTS = {
-errors: ['PocketPayError'],
+errors: ['PocketPayError', 'PaymentParseError', 'PaymentErrorCode'],
 wallet: [
 'createWallet',
 'importWallet',

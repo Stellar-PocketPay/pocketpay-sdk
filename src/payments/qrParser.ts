@@ -1,8 +1,8 @@
 // src/payments/qrParser.ts
 import { validatePublicKey, validateAmount, validateMemoInput } from '../utils';
+import { PaymentErrorCode, PaymentParseError } from '../errors/payment-errors';
 import { validateAssetSpec } from './trustline';
 import type { StellarAssetSpec } from '../types';
-import type { ValidationError } from './validation';
 
 /**
  * Supported QR payload format (URL query string):
@@ -22,17 +22,14 @@ export interface QRPayload {
   metadata?: Record<string, string>;
 }
 
-export type QRParseResult =
-  | { ok: true; payload: QRPayload }
-  | { ok: false; errors: ValidationError[] };
-
 /**
  * Parse a QR payload string into structured data, performing validation.
- * Returns a structured result rather than throwing.
+ *
+ * @throws {PaymentParseError} on the first field that fails validation; the
+ *   error's `code` names the offending field (`INVALID_ADDRESS`,
+ *   `INVALID_AMOUNT`, `INVALID_ASSET`, `INVALID_MEMO`, `INVALID_METADATA`).
  */
-export function parseQRPayload(input: string): QRParseResult {
-  const errors: ValidationError[] = [];
-
+export function parseQRPayload(input: string): QRPayload {
   // Strip any scheme prefix (e.g. "pocketpay://pay?") and keep query part
   const queryStart = input.indexOf('?');
   const queryString = queryStart >= 0 ? input.slice(queryStart + 1) : input;
@@ -46,125 +43,70 @@ export function parseQRPayload(input: string): QRParseResult {
 
   // address validation
   if (!address) {
-    errors.push({
-      code: 'INVALID_PUBLIC_KEY',
-      field: 'address',
-      reason: 'missing',
-      message: 'Destination address is required',
-    });
-  } else {
-    try {
-      validatePublicKey(address);
-    } catch (e) {
-      errors.push({
-        code: 'INVALID_PUBLIC_KEY',
-        field: 'address',
-        reason: 'invalid_format',
-        message: (e as Error).message,
-      });
-    }
+    throw new PaymentParseError('Destination address is required', PaymentErrorCode.InvalidAddress);
   }
+  check(PaymentErrorCode.InvalidAddress, () => validatePublicKey(address));
 
   // amount validation
   if (!amount) {
-    errors.push({
-      code: 'INVALID_AMOUNT',
-      field: 'amount',
-      reason: 'missing',
-      message: 'Amount is required',
-    });
-  } else {
-    try {
-      validateAmount(amount);
-    } catch (e) {
-      errors.push({
-        code: 'INVALID_AMOUNT',
-        field: 'amount',
-        reason: 'invalid_format',
-        message: (e as Error).message,
-      });
-    }
+    throw new PaymentParseError('Amount is required', PaymentErrorCode.InvalidAmount);
   }
+  check(PaymentErrorCode.InvalidAmount, () => validateAmount(amount));
 
   // asset parsing & validation (optional)
-  let asset: StellarAssetSpec | undefined = undefined;
+  let asset: StellarAssetSpec | undefined;
   if (assetRaw) {
-    const parts = assetRaw.split(':');
-    if (parts.length === 1) {
-      asset = { code: parts[0] } as StellarAssetSpec;
-    } else if (parts.length === 2) {
-      asset = { code: parts[0], issuer: parts[1] } as StellarAssetSpec;
-    } else {
-      errors.push({
-        code: 'INVALID_ASSET',
-        field: 'asset',
-        reason: 'invalid_format',
-        message: 'Asset must be "CODE" or "CODE:ISSUER"',
-      });
+    const [code = '', issuer, ...rest] = assetRaw.split(':');
+    if (rest.length > 0) {
+      throw new PaymentParseError(
+        'Asset must be "CODE" or "CODE:ISSUER"',
+        PaymentErrorCode.InvalidAsset,
+      );
     }
-    if (asset) {
-      try {
-        validateAssetSpec(asset);
-      } catch (e) {
-        errors.push({
-          code: 'INVALID_ASSET',
-          field: 'asset',
-          reason: 'invalid',
-          message: (e as Error).message,
-        });
-      }
-    }
+    const spec: StellarAssetSpec = issuer === undefined ? { code } : { code, issuer };
+    check(PaymentErrorCode.InvalidAsset, () => validateAssetSpec(spec));
+    asset = spec;
   }
 
   // memo validation (optional)
   if (memo !== undefined) {
-    try {
-      validateMemoInput(memo);
-    } catch (e) {
-      errors.push({
-        code: 'INVALID_MEMO',
-        field: 'memo',
-        reason: 'invalid_format',
-        message: (e as Error).message,
-      });
-    }
+    check(PaymentErrorCode.InvalidMemo, () => validateMemoInput(memo));
   }
 
   // metadata parsing (optional). format: "key1:value1,key2:value2"
-  let metadata: Record<string, string> | undefined = undefined;
+  let metadata: Record<string, string> | undefined;
   if (metadataRaw) {
-    metadata = {};
-    try {
-      const decoded = decodeURIComponent(metadataRaw);
-      const pairs = decoded.split(',');
-      for (const pair of pairs) {
-        const [k, v] = pair.split(':');
-        if (k && v) {
-          metadata[k] = v;
-        } else {
+    // Untrusted QR keys must be stored as own data properties. A plain object
+    // can lose "__proto__" or shadow inherited members such as "toString".
+    const parsed: Record<string, string> = Object.create(null);
+    check(PaymentErrorCode.InvalidMetadata, () => {
+      for (const pair of metadataRaw.split(',')) {
+        const separator = pair.indexOf(':');
+        if (separator <= 0 || separator === pair.length - 1) {
           throw new Error('Invalid metadata pair');
         }
+        const k = pair.slice(0, separator);
+        const v = pair.slice(separator + 1);
+        parsed[k] = v;
       }
-    } catch (e) {
-      errors.push({
-        code: 'INVALID_METADATA',
-        field: 'metadata',
-        reason: 'invalid_format',
-        message: (e as Error).message,
-      });
-    }
+    });
+    metadata = parsed;
   }
 
-  if (errors.length > 0) {
-    return { ok: false, errors };
-  }
-
-  const payload: QRPayload = {
-    address: address!,
-    amount: amount!,
-    asset,
-    memo,
-    metadata,
+  return {
+    address,
+    amount,
+    ...(asset !== undefined && { asset }),
+    ...(memo !== undefined && { memo }),
+    ...(metadata !== undefined && { metadata }),
   };
-  return { ok: true, payload };
+}
+
+/** Runs a throwing validator and re-throws any failure as a {@link PaymentParseError}. */
+function check(code: PaymentErrorCode, validate: () => unknown): void {
+  try {
+    validate();
+  } catch (e) {
+    throw new PaymentParseError(e instanceof Error ? e.message : String(e), code);
+  }
 }

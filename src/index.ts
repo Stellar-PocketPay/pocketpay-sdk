@@ -100,6 +100,7 @@ export {
 
 // ─── Error Enrichment Types ────────────────────────────────────────────────
 export type { ResultWarning, RecoveryHint } from './errors';
+export { PaymentParseError, PaymentErrorCode } from './errors';
 
 // ─── Transaction authorisation requirements (issue #248) ────────────────────
 export {
