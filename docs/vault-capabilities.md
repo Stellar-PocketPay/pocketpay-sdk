@@ -18,6 +18,33 @@ const result = await executeVaultIntent({
 });
 ```
 
+## Contract ID resolution
+
+Action intents accept an optional `contractId`, just like the underlying
+Soroban vault helpers. The same configuration precedence applies to **all six**
+intent kinds:
+
+1. A non-empty `intent.contractId`.
+2. A non-empty `SDKConfig.contractId` passed as the second argument.
+3. `VAULT_CONTRACT_ID` from the environment.
+4. `STELLAR_CONTRACT_ID` from the environment.
+
+For example, an application can configure the contract once without copying it
+into every deposit, withdrawal, balance or lock intent:
+
+```ts
+await executeVaultIntent(
+  { kind: 'getBalance', publicKey },
+  { contractId: vaultContractId },
+);
+```
+
+If none of these sources specifies a contract, the SDK raises
+`CapabilityMismatchError` with `VAULT_CONTRACT_NOT_CONFIGURED` before checking
+feature flags or lock support. This is a missing-configuration error, not an
+unsupported-feature error. Supplying a contract ID **does not** enable lock
+operations: they remain unsupported by the currently exposed contract methods.
+
 ## Readiness
 
 | Action | Supported | Capability | Feature flag |
@@ -41,7 +68,7 @@ Three gates run in order, from most actionable to least:
 
 | Situation | Error | Can the caller fix it? |
 |---|---|---|
-| No `contractId` | `CapabilityMismatchError` on `vault.contract`, code `VAULT_CONTRACT_NOT_CONFIGURED` | **Yes** — configure the contract |
+| No contract ID in intent, SDKConfig, or environment | `CapabilityMismatchError` on `vault.contract`, code `VAULT_CONTRACT_NOT_CONFIGURED` | **Yes** — configure the contract |
 | Lock action, flag off | `DisabledFeatureError` on `experimentalVaultLocks` | **Yes** — enable the flag, though see below |
 | Lock action, flag on | `UnsupportedFeatureError` on `vault.lock` | **No** |
 
@@ -82,6 +109,9 @@ POCKETPAY_FEATURE_FLAGS=experimentalVaultLocks
 - **Readiness is static.** It reflects what the SDK can call, not what a
   particular deployed contract supports. A contract missing `deposit` would
   still surface as a contract-level failure at execution time.
+- **Contract selection is shared.** Intent-level, SDK-configured, and environment
+  contract IDs follow the same precedence as Soroban helpers. A missing ID
+  fails before checking any experimental lock flag.
 - **Intents carry secrets.** `sourceSecret` appears in deposit, withdraw,
   `createLock` and `withdrawMaturedLock` intents. Nothing in this module copies
   an intent into an error or a result, and a test asserts the secret never

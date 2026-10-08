@@ -43,6 +43,7 @@ const withLocksEnabled = { featureFlags: { [VAULT_LOCKS_FEATURE_FLAG]: true } };
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('readiness model', () => {
@@ -131,8 +132,77 @@ describe('supported actions', () => {
   });
 });
 
+describe('configured contract fallback for action intents (#311)', () => {
+  it('uses SDKConfig.contractId for deposit, withdraw and balance without per-intent IDs', async () => {
+    const deposit = vi.spyOn(soroban, 'depositToVault')
+      .mockResolvedValue({ success: true, status: 'success', operation: 'deposit' } as never);
+    const withdraw = vi.spyOn(soroban, 'withdrawFromVault')
+      .mockResolvedValue({ success: true, status: 'success', operation: 'withdraw' } as never);
+    const balance = vi.spyOn(soroban, 'getVaultBalance')
+      .mockResolvedValue({ success: true, status: 'success', operation: 'get_balance' } as never);
+    const config = { contractId: CONTRACT_ID };
+
+    await executeVaultIntent({ kind: 'deposit', sourceSecret: SECRET, amount: '2' }, config);
+    await executeVaultIntent({ kind: 'withdraw', sourceSecret: SECRET, amount: '1' }, config);
+    await executeVaultIntent({ kind: 'getBalance', publicKey: PUBLIC }, config);
+
+    expect(deposit).toHaveBeenCalledWith(
+      { sourceSecret: SECRET, amount: '2', contractId: CONTRACT_ID }, config);
+    expect(withdraw).toHaveBeenCalledWith(
+      { sourceSecret: SECRET, amount: '1', contractId: CONTRACT_ID }, config);
+    expect(balance).toHaveBeenCalledWith(
+      { publicKey: PUBLIC, contractId: CONTRACT_ID }, config);
+  });
+
+  it('honors explicit > config > VAULT_CONTRACT_ID > STELLAR_CONTRACT_ID', async () => {
+    const envVault = 'C' + 'B'.repeat(55);
+    const envStellar = 'C' + 'D'.repeat(55);
+    const configured = 'C' + 'E'.repeat(55);
+    const balance = vi.spyOn(soroban, 'getVaultBalance')
+      .mockResolvedValue({ success: true, status: 'success', operation: 'get_balance' } as never);
+    vi.stubEnv('VAULT_CONTRACT_ID', envVault);
+    vi.stubEnv('STELLAR_CONTRACT_ID', envStellar);
+
+    await executeVaultIntent({ kind: 'getBalance', publicKey: PUBLIC });
+    expect(balance).toHaveBeenLastCalledWith({ publicKey: PUBLIC, contractId: envVault }, undefined);
+
+    await executeVaultIntent({ kind: 'getBalance', publicKey: PUBLIC }, { contractId: configured });
+    expect(balance).toHaveBeenLastCalledWith(
+      { publicKey: PUBLIC, contractId: configured }, { contractId: configured });
+
+    await executeVaultIntent(
+      { kind: 'getBalance', publicKey: PUBLIC, contractId: CONTRACT_ID },
+      { contractId: configured },
+    );
+    expect(balance).toHaveBeenLastCalledWith(
+      { publicKey: PUBLIC, contractId: CONTRACT_ID }, { contractId: configured });
+
+    vi.stubEnv('VAULT_CONTRACT_ID', '');
+    await executeVaultIntent({ kind: 'getBalance', publicKey: PUBLIC });
+    expect(balance).toHaveBeenLastCalledWith(
+      { publicKey: PUBLIC, contractId: envStellar }, undefined);
+  });
+
+  it('preserves feature-disabled versus unsupported-lock errors under config fallback', async () => {
+    const intent: VaultActionIntent = {
+      kind: 'createLock', sourceSecret: SECRET, amount: '2', unlockAt: 1893456000,
+    };
+    const disabled = await executeVaultIntent(intent, { contractId: CONTRACT_ID }).catch(e => e);
+    expect(isDisabledFeatureError(disabled)).toBe(true);
+
+    const unsupported = await executeVaultIntent(intent, {
+      contractId: CONTRACT_ID,
+      featureFlags: { [VAULT_LOCKS_FEATURE_FLAG]: true },
+    }).catch(e => e);
+    expect(isUnsupportedFeatureError(unsupported)).toBe(true);
+    expect(isCapabilityMismatchError(unsupported)).toBe(false);
+  });
+});
+
 describe('unconfigured contract', () => {
   it('raises a capability mismatch, not an unsupported error', async () => {
+    vi.stubEnv('VAULT_CONTRACT_ID', '');
+    vi.stubEnv('STELLAR_CONTRACT_ID', '');
     // Missing contractId is fixable by configuration, so it must not look like
     // a missing feature.
     const error = await executeVaultIntent({
@@ -148,6 +218,8 @@ describe('unconfigured contract', () => {
   });
 
   it('checks configuration before feature support, so the fixable error wins', async () => {
+    vi.stubEnv('VAULT_CONTRACT_ID', '');
+    vi.stubEnv('STELLAR_CONTRACT_ID', '');
     const error = await executeVaultIntent({
       kind: 'createLock',
       sourceSecret: SECRET,

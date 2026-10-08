@@ -65,19 +65,19 @@ export type VaultActionKind =
  * is unsupported through a typed error rather than through a missing function.
  */
 export type VaultActionIntent =
-  | { kind: 'deposit'; sourceSecret: string; amount: string; contractId: string }
-  | { kind: 'withdraw'; sourceSecret: string; amount: string; contractId: string }
-  | { kind: 'getBalance'; publicKey: string; contractId: string }
+  | { kind: 'deposit'; sourceSecret: string; amount: string; contractId?: string }
+  | { kind: 'withdraw'; sourceSecret: string; amount: string; contractId?: string }
+  | { kind: 'getBalance'; publicKey: string; contractId?: string }
   | {
       kind: 'createLock';
       sourceSecret: string;
       amount: string;
-      contractId: string;
+      contractId?: string;
       /** Unix seconds at which the position becomes withdrawable. */
       unlockAt: number;
     }
-  | { kind: 'listLocks'; publicKey: string; contractId: string }
-  | { kind: 'withdrawMaturedLock'; sourceSecret: string; contractId: string; lockId: string };
+  | { kind: 'listLocks'; publicKey: string; contractId?: string }
+  | { kind: 'withdrawMaturedLock'; sourceSecret: string; contractId?: string; lockId: string };
 
 /** What a consumer can learn about one action without attempting it. */
 export interface VaultActionReadiness {
@@ -211,7 +211,7 @@ export function validateVaultIntent(intent: VaultActionIntent): void {
  *
  * Gates run in order of how actionable the failure is:
  *
- * 1. **Contract configured?** Missing `contractId` raises
+ * 1. **Contract configured?** No ID in intent, config or environment raises
  *    `CapabilityMismatchError` on `vault.contract` — fixable by configuration.
  * 2. **Feature flag enabled?** A lock intent with the flag off raises
  *    `DisabledFeatureError` — fixable by the caller.
@@ -233,8 +233,17 @@ export async function executeVaultIntent(
   const readiness = VAULT_ACTION_READINESS[intent.kind];
   const context = { module: 'vault', operation: intent.kind } as const;
 
-  // 1 — configuration requirement, published as `vault.contract`.
-  assertCapability(VAULT_CONTRACT_CAPABILITY, Boolean(intent.contractId), context, {
+  // 1 — resolve the same contract-ID sources and precedence as Soroban's
+  // resolveContractId: explicit intent > config > VAULT_CONTRACT_ID >
+  // STELLAR_CONTRACT_ID. A configured vault must not fail this preflight merely
+  // because the individual intent omitted the ID.
+  const contractId =
+    intent.contractId ||
+    config?.contractId ||
+    process.env.VAULT_CONTRACT_ID ||
+    process.env.STELLAR_CONTRACT_ID ||
+    '';
+  assertCapability(VAULT_CONTRACT_CAPABILITY, Boolean(contractId), context, {
     code: ErrorCode.VAULT_CONTRACT_NOT_CONFIGURED,
   });
 
@@ -250,16 +259,16 @@ export async function executeVaultIntent(
   switch (intent.kind) {
     case 'deposit':
       return depositToVault(
-        { sourceSecret: intent.sourceSecret, amount: intent.amount, contractId: intent.contractId },
+        { sourceSecret: intent.sourceSecret, amount: intent.amount, contractId },
         config,
       );
     case 'withdraw':
       return withdrawFromVault(
-        { sourceSecret: intent.sourceSecret, amount: intent.amount, contractId: intent.contractId },
+        { sourceSecret: intent.sourceSecret, amount: intent.amount, contractId },
         config,
       );
     case 'getBalance':
-      return getVaultBalance({ publicKey: intent.publicKey, contractId: intent.contractId }, config);
+      return getVaultBalance({ publicKey: intent.publicKey, contractId }, config);
     default:
       // Unreachable at runtime: gate 3 rejects every kind whose readiness is
       // `supported: false`, which is exactly the set left here. TypeScript
