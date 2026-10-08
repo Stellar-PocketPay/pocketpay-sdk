@@ -11,6 +11,8 @@ a support thread.
 
 ## 1. Payment expectations
 
+- [SDK Payment-Period Communication Policy](./payment-period-communication.md) — SDK-specific guidance on a single canonical claim, contributor self-review, clear evidence, professional status requests, and preserving reward rights.
+
 - [Meaningful Change Review Guide](./meaningful-change-review.md) — what
   counts as real SDK work. Size is not the bar; completeness is. Covers
   insufficient vs. acceptable examples and the reviewer criteria used on

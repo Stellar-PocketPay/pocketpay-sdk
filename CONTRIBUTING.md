@@ -14,6 +14,7 @@ Thank you for your interest in contributing! Whether you're fixing a bug, improv
 - [Writing Tests](#writing-tests)
 - [Branching and Commits](#branching-and-commits)
 - [Pull Request Checklist](#pull-request-checklist)
+- [Payment-Period Communication](#payment-period-communication)
 - [Reporting Issues](#reporting-issues)
 
 ---
@@ -229,6 +230,19 @@ Maintainers use the [Contribution Quality Gate](./docs/contribution-quality-gate
 The checkbox form lives at [`.github/checklists/contribution-quality-gate.md`](.github/checklists/contribution-quality-gate.md). The guide includes examples of **incomplete** vs **acceptable** work.
 
 Contributors should read that guide before opening a PR. Maintainers should not approve until the checklist passes. A merged PR is still **not** automatic payment approval.
+
+---
+
+## Payment-Period Communication
+
+Before requesting a reward or repeatedly asking about payment status, review the
+[SDK Payment-Period Communication Policy](./docs/payment-period-communication.md)
+and [Evaluation Readiness Index](./docs/evaluation-readiness.md).
+An affirmative compensation claim is appropriate for eligible delivered work,
+but duplicate cross-channel demands or harassment are not. Keep one canonical
+claim/PR thread, include the actual evidence and program decision, and follow
+the sponsor's stated review and payout process. A merge is not automatic reward
+approval, and this guidance does not waive or forfeit any claim.
 
 ---
 
