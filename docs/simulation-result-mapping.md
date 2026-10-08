@@ -39,6 +39,22 @@ console.log(mapped.cost?.minResourceFee);
 `simulateContractCall()` runs a dry-run against Soroban RPC and returns the same
 mapped shape (`ContractSimulationResult`).
 
+## Contradictory RPC fields: fail closed
+
+An explicit non-null RPC `error` field always wins over success-looking
+`result`, `transactionData`, or `minResourceFee` metadata, **including**
+when the installed Stellar SDK's `isSimulationError` helper returns
+`false`. Such a payload maps to `{ success: false, status: 'failed' }`
+and remains ineligible for signing or transaction submission. A structured
+error mapper may still supply a contract-specific error code; it cannot
+make the simulation proceedable. This is a response-integrity rule, not a
+claim that the SDK helper was called incorrectly.
+
+The focused `tests/simulation-mapper.test.ts` regression explicitly mocks
+a conflicting SDK guard and confirms that failure takes precedence. This
+test must be executed in a checkout with the existing Vitest dependencies
+before describing this change as a verified runtime pass.
+
 ## Soroban client integration
 
 `ContractClient` (`readOnly`, `invoke`, and auth simulation) runs every response

@@ -421,9 +421,10 @@ export function mapSimulationResult<T = unknown>(
   const isRestore = callApiGuard('isSimulationRestore', response);
   const isSuccess = callApiGuard('isSimulationSuccess', response);
 
-  const hasErrorField =
-    resp.error != null &&
-    (typeof resp.error === 'string' || typeof resp.error === 'object');
+  // RPC errors take precedence over SDK guard disagreement and success-like
+  // result/cost metadata. Never authorize signing with an error-bearing reply.
+  const hasErrorField = Object.prototype.hasOwnProperty.call(resp, 'error') &&
+    resp.error != null;
   const hasRestorePreamble =
     resp.restorePreamble != null && typeof resp.restorePreamble === 'object';
   const looksSuccessful =
@@ -431,8 +432,7 @@ export function mapSimulationResult<T = unknown>(
     resp.transactionData != null ||
     resp.minResourceFee != null;
 
-  const treatAsFailed =
-    isError === true || (isError === undefined && hasErrorField);
+  const treatAsFailed = isError === true || hasErrorField;
   // Prefer restore when the SDK says so, or when a restore preamble is present
   // even if isSimulationRestore returns false for incomplete fixtures.
   const treatAsRestore =

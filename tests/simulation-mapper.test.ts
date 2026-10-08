@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as StellarSDK from '@stellar/stellar-sdk';
 import {
   ErrorCode,
   mapSimulationResult,
@@ -55,6 +56,32 @@ describe('mapSimulationResult', () => {
       errorCode: ErrorCode.SOROBAN_SIMULATION_FAILED,
     });
     expect(mapped.error).toContain('HostError');
+  });
+
+  it('refuses contradictory RPC simulation error even when the SDK error guard returns false', () => {
+    const guard = vi.spyOn(StellarSDK.rpc.Api, 'isSimulationError')
+      .mockReturnValue(false);
+    try {
+      // A success-looking response may carry a contract error; result and fee
+      // metadata must never authorize signing in that case.
+      const response = {
+        ...simulationSuccessFixture.response,
+        error: 'HostError: contract rejected this operation',
+        result: { retval: { mock: 'ok' } },
+        transactionData: 'present',
+        minResourceFee: '100',
+      };
+      const mapped = mapSimulationResult(response);
+      expect(mapped).toMatchObject({
+        success: false,
+        status: 'failed',
+        errorCode: ErrorCode.SOROBAN_SIMULATION_FAILED,
+      });
+      expect(mapped.error).toContain('HostError');
+      expect(mapped.result).toBeUndefined();
+    } finally {
+      guard.mockRestore();
+    }
   });
 
   it('maps restore preamble as unsupported', () => {
