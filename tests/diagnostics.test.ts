@@ -52,6 +52,23 @@ describe('diagnostics redaction', () => {
     expect(redacted.nested.ok).toBe(true);
   });
 
+  it('redacts endpoint URLs with mixed-case and separator keys in nested diagnostics', () => {
+    const opaque = 'private-path-query-309';
+    const raw = `https://horizon.example.test/path/${opaque}?access=${opaque}`;
+    const input = {
+      horizonURL: raw,
+      nested: { soroban_rpc_url: raw, 'Horizon-URL': raw },
+      nonEndpointUrl: raw,
+    };
+    const safe = redactDiagnosticsValue(input);
+    expect(safe.horizonURL).toBe('https://horizon.example.test');
+    expect(safe.nested.soroban_rpc_url).toBe('https://horizon.example.test');
+    expect(safe.nested['Horizon-URL']).toBe('https://horizon.example.test');
+    // Other URL keys retain existing free-form behavior; callers should never
+    // export credential-bearing URLs under ambiguous metadata field names.
+    expect(safe.nonEndpointUrl).toBe(raw);
+  });
+
   it('scrubs Stellar secret keys embedded in free-form strings', () => {
     const secret = StellarSDK.Keypair.random().secret();
     const scrubbed = redactDiagnosticsString(`failed with key ${secret} end`);
@@ -167,6 +184,21 @@ describe('diagnostics hooks (opt-in)', () => {
 describe('diagnostics report', () => {
   beforeEach(() => {
     resetDiagnosticsHooks();
+  });
+
+  it('reports only the endpoint origin in config events and support exports', () => {
+    const marker = 'sample-opaque-path-309';
+    const endpoint = `https://horizon.example.test/${marker}?parameter=${marker}`;
+    const events: DiagnosticsEvent[] = [];
+    enableDiagnostics({ hooks: { onEvent: (event) => events.push(event) } });
+    const report = buildDiagnosticsReport({ horizonUrl: endpoint });
+    expect(report.config.horizonUrl).toBe('https://horizon.example.test');
+    expect(report.network.horizonUrl).toBe('https://horizon.example.test');
+    expect(JSON.stringify(report)).not.toContain(marker);
+    const configEvent = events.find((event) => event.type === 'config.resolved');
+    expect(configEvent).toBeDefined();
+    expect(configEvent!.data.horizonUrl).toBe('https://horizon.example.test');
+    expect(JSON.stringify(configEvent)).not.toContain(marker);
   });
 
   it('builds a support-safe report without secrets', () => {

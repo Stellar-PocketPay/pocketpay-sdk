@@ -81,6 +81,21 @@ See [Safe Retry Policy](./retry-policy.md) for the full state machine. The
 short version: **retry reads freely; never retry a submission without going
 through `submitTransactionIdempotently` or `withRetryPolicy`.**
 
+## Endpoint URL validation and support privacy
+
+Network endpoints must use the exact `http:` or `https:` scheme with a host.
+Scheme lookalikes such as `httpx:`, embedded URL credentials
+(`user:password@`) and fragments are rejected during configuration validation.
+The SDK reports typed configuration errors without echoing the supplied URL.
+
+Live probes still use the full configured URL for transport. **Published
+diagnostics, reachability results and configuration lifecycle hooks expose only
+the origin** (scheme, host and port), not URL userinfo, paths, query parameters
+or fragments. This is intentionally stricter than matching known token patterns:
+an unknown custom query parameter can also carry credentials. Do not use the
+redacted diagnostics URL as a request endpoint; retain the original validated
+SDK configuration for network operations.
+
 ## Endpoint diagnostics
 
 Two complementary tools are available, both safe to share with support —

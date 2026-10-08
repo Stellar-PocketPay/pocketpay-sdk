@@ -9,6 +9,7 @@ import { PocketPayError } from '../types';
 import type { TimeoutStage } from '../types';
 import { wrapError } from '../utils';
 import { ErrorCode, ERROR_CODES } from '../errors/codes';
+import { redactEndpointUrl } from '../diagnostics/redact';
 
 const FALLBACK_TIMEOUT_MS = 30_000;
 
@@ -352,15 +353,16 @@ export async function checkEndpointReachability(
   timeoutMs = 5_000,
 ): Promise<EndpointReachability> {
   const startedAt = Date.now();
+  const reportUrl = redactEndpointUrl(url);
   try {
     await fetchWithTimeout(url, { method: 'GET' }, 'Endpoint reachability probe', timeoutMs);
-    return { url, reachable: true, latencyMs: Date.now() - startedAt };
+    return { url: reportUrl, reachable: true, latencyMs: Date.now() - startedAt };
   } catch (error) {
     // A PocketPayError (e.g. REQUEST_TIMEOUT) already carries a typed code.
     // Any other rejection (ECONNREFUSED, ENOTFOUND, etc.) means the socket
     // or DNS lookup itself failed, which we surface uniformly as unreachable.
     const code = error instanceof PocketPayError ? error.code : ErrorCode.NET_UNREACHABLE;
-    return { url, reachable: false, latencyMs: Date.now() - startedAt, errorCode: code };
+    return { url: reportUrl, reachable: false, latencyMs: Date.now() - startedAt, errorCode: code };
   }
 }
 

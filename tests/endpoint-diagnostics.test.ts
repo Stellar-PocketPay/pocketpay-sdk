@@ -41,6 +41,18 @@ describe('probeConfiguredEndpoints', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('uses full URLs for the request but reports only safe origins', async () => {
+    mockFetchOk();
+    const marker = 'private-path-and-query-marker-309';
+    const endpoint = `https://horizon.example.test/${marker}?access_key=${marker}`;
+    const report = await probeConfiguredEndpoints({ horizonUrl: endpoint });
+
+    expect(report.horizon.reachable).toBe(true);
+    expect(report.horizon.url).toBe('https://horizon.example.test');
+    expect(JSON.stringify(report)).not.toContain(marker);
+    expect(fetch).toHaveBeenCalledWith(endpoint, expect.any(Object));
+  });
+
   it('never includes secrets or response bodies in the report', async () => {
     vi.stubGlobal(
       'fetch',

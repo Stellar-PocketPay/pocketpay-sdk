@@ -107,6 +107,23 @@ describe('validatePocketPayConfig', () => {
       expect(result.errors.some((e) => e.field === 'sorobanRpcUrl' && e.code === 'INVALID_SOROBAN_RPC_URL')).toBe(true);
     });
 
+    it('rejects lookalike URL schemes and does not expose endpoint credentials', () => {
+      const lookalike = validatePocketPayConfig({
+        horizonUrl: 'httpx://horizon.example.test',
+      });
+      expect(lookalike.valid).toBe(false);
+      expect(lookalike.errors.some((e) => e.code === 'INVALID_HORIZON_URL')).toBe(true);
+
+      const credential = 'not_a_stellar_key_or_known_token_309';
+      const sensitive = validatePocketPayConfig({
+        sorobanRpcUrl: `https://alice:${credential}@rpc.example.test/path/${credential}?key=${credential}`,
+      });
+      expect(sensitive.valid).toBe(false);
+      expect(sensitive.errors.some((e) => e.code === 'INVALID_SOROBAN_RPC_URL')).toBe(true);
+      expect(JSON.stringify(sensitive.issues)).not.toContain(credential);
+      expect(JSON.stringify(sensitive.issues)).toContain('https://rpc.example.test');
+    });
+
     it('reports error for negative or zero timeout', () => {
       const negResult = validatePocketPayConfig({ timeout: -5000 });
       expect(negResult.valid).toBe(false);

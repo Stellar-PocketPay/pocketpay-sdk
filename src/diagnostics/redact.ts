@@ -23,6 +23,12 @@ const STELLAR_SECRET_RE = /\bS[A-Z2-7]{55}\b/g;
 /** Long opaque tokens that often appear in headers / env dumps. */
 const OPAQUE_TOKEN_RE = /\b(?:sk|pk|api)[_-][A-Za-z0-9_-]{16,}\b/gi;
 
+/** Endpoint metadata keys are not generally secret, but their paths and query can be. */
+function isEndpointKey(key: string): boolean {
+  const normalized = key.toLowerCase().replace(/[-_\s]/g, '');
+  return normalized === 'horizonurl' || normalized === 'sorobanrpcurl';
+}
+
 function isSensitiveKey(key: string): boolean {
   const lower = key.toLowerCase();
   if (SENSITIVE_KEY_SET.has(lower)) return true;
@@ -56,6 +62,28 @@ export function redactDiagnosticsString(value: string): string {
   let out = value.replace(STELLAR_SECRET_RE, REDACTED);
   out = out.replace(OPAQUE_TOKEN_RE, REDACTED);
   return out;
+}
+
+/**
+ * Render only the origin of an endpoint in a support report or error.
+ *
+ * Credentials may be embedded in URL userinfo, path segments or arbitrary
+ * query parameters, so pattern-only secret scrubbing is not sufficient.
+ * The actual request URL is not modified by this formatter.
+ */
+export function redactEndpointUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    if (
+      (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+      !parsed.hostname
+    ) {
+      return '[INVALID ENDPOINT]';
+    }
+    return parsed.origin;
+  } catch {
+    return '[INVALID ENDPOINT]';
+  }
 }
 
 /**
@@ -101,6 +129,9 @@ function redactInternal(value: unknown, seen: WeakSet<object>): unknown {
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     if (isSensitiveKey(key)) {
       out[key] = REDACTED;
+    } else if (isEndpointKey(key) && typeof child === 'string') {
+      // Redact arbitrary credentials even when they are not recognizable tokens.
+      out[key] = redactEndpointUrl(child);
     } else {
       out[key] = redactInternal(child, seen);
     }

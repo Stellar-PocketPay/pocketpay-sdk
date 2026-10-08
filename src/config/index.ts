@@ -19,6 +19,7 @@ import {
 import { DisabledFeatureError, FeatureContext } from '../errors';
 import { redactSensitive } from '../utils';
 import { emitDiagnosticsEvent } from '../diagnostics/hooks';
+import { redactEndpointUrl } from '../diagnostics/redact';
 // ─── Default URLs ───────────────────────────────────────────────────────────
 const HORIZON_URLS: Record<StellarNetwork, string> = {
   testnet: 'https://horizon-testnet.stellar.org',
@@ -56,6 +57,11 @@ export function validateNetwork(network: unknown): asserts network is StellarNet
     );
   }
 }
+/** Only expose an endpoint origin when reporting malformed or risky config. */
+function sanitizeEndpointValue(value: unknown): string {
+  return typeof value === 'string' ? redactEndpointUrl(value) : '[INVALID ENDPOINT]';
+}
+
 /**
  * Validates that a URL string is a valid HTTP(S) URL.
  *
@@ -67,18 +73,18 @@ export function validateNetwork(network: unknown): asserts network is StellarNet
 export function validateUrl(url: string, fieldName: string, errorCode: string, field: string): void {
   try {
     const parsed = new URL(url);
-    if (!parsed.protocol.startsWith('http')) {
+    if (((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.hostname || !!parsed.username || !!parsed.password || !!parsed.hash)) {
       throw new Error('Protocol must be http or https');
     }
   } catch (error) {
     throw new PocketPayError(
-      `Invalid ${fieldName}: "${url}". Must be a valid HTTP(S) URL.`,
+      `Invalid ${fieldName}. Must be a credential-free HTTP(S) URL without a fragment.`,
       errorCode,
       {
         validation: {
           field,
           reason: 'invalid_url',
-          value: url
+          value: sanitizeEndpointValue(url)
         }
       }
     );
@@ -503,19 +509,19 @@ export function validatePocketPayConfig(
       severity: 'error',
       field: 'horizonUrl',
       code: 'INVALID_HORIZON_URL',
-      message: `Invalid Horizon URL: "${rawHorizonUrl}". Must be a non-empty string.`,
-      value: sanitizeValue(rawHorizonUrl),
+      message: `Invalid Horizon URL: "${sanitizeEndpointValue(rawHorizonUrl)}". Must be a non-empty string.`,
+      value: sanitizeEndpointValue(rawHorizonUrl),
     });
   } else {
     try {
       const parsed = new URL(rawHorizonUrl);
-      if (!parsed.protocol.startsWith('http')) {
+      if (((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.hostname || !!parsed.username || !!parsed.password || !!parsed.hash)) {
         issues.push({
           severity: 'error',
           field: 'horizonUrl',
           code: 'INVALID_HORIZON_URL',
-          message: `Invalid Horizon URL: "${rawHorizonUrl}". Protocol must be http or https.`,
-          value: sanitizeValue(rawHorizonUrl),
+          message: `Invalid Horizon URL: "${sanitizeEndpointValue(rawHorizonUrl)}". Protocol must be http or https.`,
+          value: sanitizeEndpointValue(rawHorizonUrl),
         });
       } else {
         // Advisory Warnings for Horizon URL
@@ -528,8 +534,8 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'horizonUrl',
             code: 'INSECURE_HTTP_URL',
-            message: `Horizon URL "${rawHorizonUrl}" uses unencrypted HTTP protocol for a non-localhost host.`,
-            value: sanitizeValue(rawHorizonUrl),
+            message: `Horizon URL "${sanitizeEndpointValue(rawHorizonUrl)}" uses unencrypted HTTP protocol for a non-localhost host.`,
+            value: sanitizeEndpointValue(rawHorizonUrl),
           });
         }
         if (
@@ -540,8 +546,8 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'horizonUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Horizon URL "${rawHorizonUrl}" contains "testnet" but network is configured as mainnet.`,
-            value: sanitizeValue(rawHorizonUrl),
+            message: `Horizon URL "${sanitizeEndpointValue(rawHorizonUrl)}" contains "testnet" but network is configured as mainnet.`,
+            value: sanitizeEndpointValue(rawHorizonUrl),
           });
         } else if (
           network === 'testnet' &&
@@ -552,8 +558,8 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'horizonUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Horizon URL "${rawHorizonUrl}" points to Stellar public mainnet endpoint but network is configured as testnet.`,
-            value: sanitizeValue(rawHorizonUrl),
+            message: `Horizon URL "${sanitizeEndpointValue(rawHorizonUrl)}" points to Stellar public mainnet endpoint but network is configured as testnet.`,
+            value: sanitizeEndpointValue(rawHorizonUrl),
           });
         }
       }
@@ -562,8 +568,8 @@ export function validatePocketPayConfig(
         severity: 'error',
         field: 'horizonUrl',
         code: 'INVALID_HORIZON_URL',
-        message: `Invalid Horizon URL: "${rawHorizonUrl}". Must be a valid HTTP(S) URL.`,
-        value: sanitizeValue(rawHorizonUrl),
+        message: `Invalid Horizon URL: "${sanitizeEndpointValue(rawHorizonUrl)}". Must be a valid HTTP(S) URL.`,
+        value: sanitizeEndpointValue(rawHorizonUrl),
       });
     }
   }
@@ -579,19 +585,19 @@ export function validatePocketPayConfig(
       severity: 'error',
       field: 'sorobanRpcUrl',
       code: 'INVALID_SOROBAN_RPC_URL',
-      message: `Invalid Soroban RPC URL: "${rawSorobanRpcUrl}". Must be a non-empty string.`,
-      value: sanitizeValue(rawSorobanRpcUrl),
+      message: `Invalid Soroban RPC URL: "${sanitizeEndpointValue(rawSorobanRpcUrl)}". Must be a non-empty string.`,
+      value: sanitizeEndpointValue(rawSorobanRpcUrl),
     });
   } else {
     try {
       const parsed = new URL(rawSorobanRpcUrl);
-      if (!parsed.protocol.startsWith('http')) {
+      if (((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.hostname || !!parsed.username || !!parsed.password || !!parsed.hash)) {
         issues.push({
           severity: 'error',
           field: 'sorobanRpcUrl',
           code: 'INVALID_SOROBAN_RPC_URL',
-          message: `Invalid Soroban RPC URL: "${rawSorobanRpcUrl}". Protocol must be http or https.`,
-          value: sanitizeValue(rawSorobanRpcUrl),
+          message: `Invalid Soroban RPC URL: "${sanitizeEndpointValue(rawSorobanRpcUrl)}". Protocol must be http or https.`,
+          value: sanitizeEndpointValue(rawSorobanRpcUrl),
         });
       } else {
         // Advisory Warnings for Soroban RPC URL
@@ -604,8 +610,8 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'sorobanRpcUrl',
             code: 'INSECURE_HTTP_URL',
-            message: `Soroban RPC URL "${rawSorobanRpcUrl}" uses unencrypted HTTP protocol for a non-localhost host.`,
-            value: sanitizeValue(rawSorobanRpcUrl),
+            message: `Soroban RPC URL "${sanitizeEndpointValue(rawSorobanRpcUrl)}" uses unencrypted HTTP protocol for a non-localhost host.`,
+            value: sanitizeEndpointValue(rawSorobanRpcUrl),
           });
         }
         if (
@@ -616,8 +622,8 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'sorobanRpcUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Soroban RPC URL "${rawSorobanRpcUrl}" contains "testnet" but network is configured as mainnet.`,
-            value: sanitizeValue(rawSorobanRpcUrl),
+            message: `Soroban RPC URL "${sanitizeEndpointValue(rawSorobanRpcUrl)}" contains "testnet" but network is configured as mainnet.`,
+            value: sanitizeEndpointValue(rawSorobanRpcUrl),
           });
         } else if (
           network === 'testnet' &&
@@ -628,8 +634,8 @@ export function validatePocketPayConfig(
             severity: 'warning',
             field: 'sorobanRpcUrl',
             code: 'NETWORK_MISMATCH',
-            message: `Soroban RPC URL "${rawSorobanRpcUrl}" points to Stellar public mainnet endpoint but network is configured as testnet.`,
-            value: sanitizeValue(rawSorobanRpcUrl),
+            message: `Soroban RPC URL "${sanitizeEndpointValue(rawSorobanRpcUrl)}" points to Stellar public mainnet endpoint but network is configured as testnet.`,
+            value: sanitizeEndpointValue(rawSorobanRpcUrl),
           });
         }
       }
@@ -638,8 +644,8 @@ export function validatePocketPayConfig(
         severity: 'error',
         field: 'sorobanRpcUrl',
         code: 'INVALID_SOROBAN_RPC_URL',
-        message: `Invalid Soroban RPC URL: "${rawSorobanRpcUrl}". Must be a valid HTTP(S) URL.`,
-        value: sanitizeValue(rawSorobanRpcUrl),
+        message: `Invalid Soroban RPC URL: "${sanitizeEndpointValue(rawSorobanRpcUrl)}". Must be a valid HTTP(S) URL.`,
+        value: sanitizeEndpointValue(rawSorobanRpcUrl),
       });
     }
   }
