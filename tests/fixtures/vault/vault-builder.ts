@@ -20,8 +20,8 @@ export class VaultBuilder extends FixtureBuilder<VaultFixture> {
       amount: '0.00',
       action: 'deposit',
       status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2024-01-15T10:30:00.000Z'),
+      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
     };
   }
 

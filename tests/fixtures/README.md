@@ -11,6 +11,44 @@ The fixture framework provides deterministic, reusable test fixtures for SDK int
 - **Type-safe**: Full TypeScript support
 - **Composable**: Build complex fixtures from simple ones
 
+## Payment-flow integration scenarios (GrantFox #448)
+
+Import `paymentFlowFixtures` from `tests/fixtures` to reuse six *local,
+deterministic* scenarios: `nativeSuccess`, `issuedSuccess` (USDC with an issuer),
+`invalidRecipient`, `insufficientFunds`, `networkFailure`, and `pending`.
+Each scenario has an account, typed SDK payment-intent input, payment record,
+transaction preview, network response and a simulated receipt.
+
+All four account/payment/transaction/vault builders use
+`2024-01-15T10:30:00.000Z` as their default `createdAt` and `updatedAt`
+timestamp instead of wall-clock time. Builders can still override either field
+with `.set('createdAt', new Date(...))` when a test explicitly needs time
+variation. Each new builder starts from separate fixture objects.
+
+The public Stellar account IDs and issued-asset issuer here are deterministic
+test inputs; no private seed, signing key, wallet credential or real network
+operation is stored in these scenario fixtures. The example hash and receipt
+are simulated outcomes, **not** proof that a transaction was broadcast or
+confirmed. Likewise `insufficientFunds` is a fixture for a downstream
+balance-check response; the SDK's pure `createPaymentIntent` preflight does
+not query ledger balances.
+
+```ts
+import { paymentFlowFixtures } from './fixtures';
+import { createPaymentIntent } from '../src/payments/intent';
+
+const { issuedSuccess, invalidRecipient, networkFailure } = paymentFlowFixtures;
+const valid = createPaymentIntent(issuedSuccess.input);
+const invalid = createPaymentIntent(invalidRecipient.input);
+
+expect(valid.validationResult?.valid).toBe(true);
+expect(invalid.validationResult?.valid).toBe(false);
+expect(networkFailure.network.status).toBe(503);
+```
+
+The focused `tests/payment-integration-fixtures.test.ts` consumes these
+scenarios through real SDK preflight logic without network dependencies.
+
 ## Available Fixtures
 
 ### Accounts

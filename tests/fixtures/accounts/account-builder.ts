@@ -21,8 +21,8 @@ export class AccountBuilder extends FixtureBuilder<AccountFixture> {
       exists: true,
       frozen: false,
       pendingTransaction: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2024-01-15T10:30:00.000Z'),
+      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
     };
   }
 
