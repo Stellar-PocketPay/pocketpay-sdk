@@ -80,20 +80,28 @@ export function emitDiagnosticsEvent(
   data: Record<string, unknown> = {},
 ): void {
   if (!isDiagnosticsEnabled()) return;
-  const onEvent = hooks?.onEvent;
-  if (!onEvent) return;
-
-  const event: DiagnosticsEvent = {
-    schemaVersion: 1,
-    domain,
-    type,
-    timestamp: new Date().toISOString(),
-    data: redactDiagnosticsValue(data) as Record<string, unknown>,
-  };
 
   try {
-    onEvent(event);
+    // Hook lookup and event preparation are deliberately inside the guard:
+    // an accessor on caller-supplied data may throw during deep redaction.
+    const onEvent = hooks?.onEvent;
+    if (!onEvent) return;
+
+    const event: DiagnosticsEvent = {
+      schemaVersion: 1,
+      domain,
+      type,
+      timestamp: new Date().toISOString(),
+      data: redactDiagnosticsValue(data) as Record<string, unknown>,
+    };
+
+    const pending = onEvent(event);
+    if (pending) {
+      // Attach the rejection handler immediately; async observers cannot
+      // produce unhandled rejections or affect the SDK's transaction flow.
+      void Promise.resolve(pending).catch(() => {});
+    }
   } catch {
-    // Never let a broken consumer hook fail the SDK operation.
+    // Neither malformed diagnostic data nor consumer errors may escape.
   }
 }

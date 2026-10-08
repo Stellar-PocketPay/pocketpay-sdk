@@ -26,7 +26,9 @@ export interface DiagnosticsHooks {
    * Called for each lifecycle event when diagnostics are enabled.
    * Receives a redacted event — never secret keys, seeds, or signed XDR.
    */
-  onEvent?: (event: DiagnosticsEvent) => void;
+  // Keep existing synchronous callbacks (including callbacks returning a value)
+  // assignable while also accepting asynchronous lifecycle consumers.
+  onEvent?: ((event: DiagnosticsEvent) => void) | ((event: DiagnosticsEvent) => Promise<void>);
 }
 
 /** Options for enabling diagnostics. */

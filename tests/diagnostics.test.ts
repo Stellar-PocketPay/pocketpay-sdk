@@ -150,6 +150,34 @@ describe('diagnostics hooks (opt-in)', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('does not propagate exceptions from data getters during redaction', () => {
+    const events: DiagnosticsEvent[] = [];
+    enableDiagnostics({ hooks: { onEvent: (event) => { events.push(event); } } });
+
+    const data: Record<string, unknown> = {};
+    Object.defineProperty(data, 'publicKey', {
+      enumerable: true,
+      get: () => { throw new Error('untrusted accessor'); },
+    });
+
+    expect(() => emitDiagnosticsEvent('wallet', 'wallet.created', data)).not.toThrow();
+    expect(events).toHaveLength(0); // Never deliver partly redacted data.
+  });
+
+  it('absorbs a rejected async consumer hook', async () => {
+    enableDiagnostics({
+      hooks: {
+        onEvent: async () => {
+          throw new Error('async consumer failed');
+        },
+      },
+    });
+
+    expect(() => emitDiagnosticsEvent('transaction', 'transaction.submit.pending')).not.toThrow();
+    // Cross the next macrotask so an unhandled rejection would surface to Vitest.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
+
   it('hook exceptions do not throw to the caller', () => {
     enableDiagnostics({
       hooks: {

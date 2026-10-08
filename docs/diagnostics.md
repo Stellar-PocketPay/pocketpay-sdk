@@ -70,6 +70,16 @@ Redaction is implemented by `redactDiagnosticsValue` using the deny-list in
 | `network` | `network.retry.attempt` | attempt, outcome kind, delayMs, txHash |
 | `vault` | `vault.readiness` | `ready`, operation, configuration flags |
 
+## Observer isolation
+
+Lifecycle hooks may be synchronous or async (`void | Promise<void>`). SDK
+operations never await application observers. Errors from hook lookup, diagnostics
+redaction (including throwing getters in supplied data), and synchronous or
+rejected asynchronous observers are swallowed; an event that cannot be fully
+redacted is dropped rather than delivering partially sanitized data.
+Observers should handle their own delivery failures if support telemetry must
+be retried or audited. Hook failures never indicate transaction settlement.
+
 ## Support workflow
 
 1. Reproduce with diagnostics enabled in a **non-production** environment.
