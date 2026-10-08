@@ -382,8 +382,23 @@ export class ContractClient<
         };
       }
 
-      // Poll for transaction status
-      const getResult = await this.pollTransactionStatus(sendResult.hash);
+      // The transaction has already been submitted. A timeout, missing
+      // confirmation or unreachable RPC endpoint does NOT prove failure.
+      // Keep the hash so consumers can reconcile without resubmitting.
+      const getResult = await this.pollTransactionStatus(sendResult.hash)
+        .catch(() => null);
+
+      if (getResult === null || getResult.status === 'NOT_FOUND') {
+        return {
+          success: false,
+          status: 'pending',
+          hash: sendResult.hash,
+          error: 'Transaction was submitted but its final status is unknown. Check the hash before retrying.',
+          errorCode: 'TX_STATUS_UNKNOWN',
+          simulationStatus: mapped.status,
+          warnings: mapped.warnings,
+        };
+      }
 
       if (getResult.status === 'SUCCESS') {
         let value: T | undefined;
@@ -403,11 +418,23 @@ export class ContractClient<
         };
       }
 
+      if (getResult.status === 'FAILED') {
+        return {
+          success: false,
+          status: 'failed',
+          hash: sendResult.hash,
+          error: 'Transaction was confirmed failed',
+          errorCode: 'TX_STATUS_FAILED',
+        };
+      }
+
+      // Unknown future SDK status: never claim a definitive failure.
       return {
         success: false,
-        status: 'failed',
-        error: `Transaction status: ${getResult.status}`,
-        errorCode: `TX_STATUS_${getResult.status}`,
+        status: 'pending',
+        hash: sendResult.hash,
+        error: 'Transaction status is not final. Reconcile by hash before retrying.',
+        errorCode: 'TX_STATUS_UNKNOWN',
       };
     } catch (error) {
       if (error instanceof PocketPayError) throw error;
@@ -532,23 +559,29 @@ export class ContractClient<
   /**
    * Polls for transaction status until it resolves.
    */
-  private async pollTransactionStatus(hash: string): Promise<StellarSDK.rpc.Api.GetSuccessfulTransactionResponse | StellarSDK.rpc.Api.GetFailedTransactionResponse> {
-    let getResult = await withTimeout(
-      'Soroban transaction status request',
-      this.config.timeout,
-      this.sorobanServer.getTransaction(hash),
-    );
+  private async pollTransactionStatus(hash: string): Promise<
+    StellarSDK.rpc.Api.GetSuccessfulTransactionResponse
+    | StellarSDK.rpc.Api.GetFailedTransactionResponse
+    | { status: 'NOT_FOUND' }
+  > {
+    // Limit total confirmation time, not just each individual RPC request.
+    // A permanently NOT_FOUND hash must not block invoke() forever.
+    const deadline = Date.now() + this.config.timeout;
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return { status: 'NOT_FOUND' };
 
-    while (getResult.status === 'NOT_FOUND') {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      getResult = await withTimeout(
+      const result = await withTimeout(
         'Soroban transaction status request',
-        this.config.timeout,
+        remaining,
         this.sorobanServer.getTransaction(hash),
       );
-    }
+      if (result.status !== 'NOT_FOUND') return result;
 
-    return getResult;
+      const wait = Math.min(1000, deadline - Date.now());
+      if (wait <= 0) return { status: 'NOT_FOUND' };
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
   }
 
   /**

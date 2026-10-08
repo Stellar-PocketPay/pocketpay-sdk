@@ -179,6 +179,61 @@ describe('Soroban contract client factory', () => {
     expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
   });
 
+  it('returns the submitted hash when confirmation RPC fails', async () => {
+    mocks.server.simulateTransaction.mockResolvedValue({
+      result: { retval: { value: undefined } },
+    });
+    mocks.server.getTransaction.mockRejectedValue(new Error('temporary RPC outage'));
+    const client = createContractClient({ contractId, methods });
+
+    const result = await client.invoke({
+      method: 'deposit',
+      params: { user: sourcePublicKey, amount: 10n },
+      signWith: sourceSecret,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 'pending',
+      hash: 'transaction-hash',
+      errorCode: 'TX_STATUS_UNKNOWN',
+    });
+    expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
+    expect(mocks.server.getTransaction).toHaveBeenCalledOnce();
+  });
+
+  it('bounds perpetually missing confirmation without claiming failure', async () => {
+    mocks.server.simulateTransaction.mockResolvedValue({
+      result: { retval: { value: undefined } },
+    });
+    mocks.server.getTransaction.mockResolvedValue({ status: 'NOT_FOUND' });
+    // Advance the apparent wall clock beyond the overall poll budget after
+    // the first RPC reply, avoiding a real delay or a broad timing suite.
+    const times = [0, 0, 60_000];
+    const clock = vi.spyOn(Date, 'now').mockImplementation(
+      () => times.shift() ?? 60_000,
+    );
+    try {
+      const client = createContractClient({ contractId, methods });
+      const result = await client.invoke({
+        method: 'deposit',
+        params: { user: sourcePublicKey, amount: 10n },
+        signWith: sourceSecret,
+      });
+
+      expect(result).toMatchObject({
+        success: false,
+        status: 'pending',
+        hash: 'transaction-hash',
+        errorCode: 'TX_STATUS_UNKNOWN',
+      });
+      expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
+      expect(mocks.server.getTransaction).toHaveBeenCalledOnce();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('maps contract-specific simulation failures consistently', async () => {
     mocks.server.simulateTransaction.mockResolvedValue({
       error: 'insufficient balance',
