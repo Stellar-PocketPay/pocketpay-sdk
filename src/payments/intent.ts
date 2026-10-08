@@ -80,7 +80,7 @@ export function createPaymentIntent(params: CreatePaymentIntentParams): PaymentI
     amount: params.amount ? params.amount.trim() : '',
     asset,
     assetMetadata,
-    memo: params.memo ? params.memo.trim() : undefined,
+    memo: typeof params.memo === 'string' ? (params.memo.trim() || undefined) : params.memo,
     status: assetState === 'unsupported' ? 'unsupported_asset' : 'created',
     assetState,
     trustlineStrategy,
@@ -195,7 +195,9 @@ export function validatePaymentIntent(intent: PaymentIntent): PaymentIntentValid
   }
 
   // 5. Memo check
-  if (intent.memo) {
+  // Validate every supplied memo, including falsey invalid runtime values (0, false,
+  // NaN). Only an omitted memo is absent; the memo helper permits empty text.
+  if (intent.memo !== undefined) {
     try {
       validateMemoInput(intent.memo);
     } catch (err) {

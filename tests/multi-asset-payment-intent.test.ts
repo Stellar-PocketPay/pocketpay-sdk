@@ -136,6 +136,68 @@ describe('Multi-Asset Payment Intent Model', () => {
     });
   });
 
+  describe('Typed Memo Policy', () => {
+    const validParams = {
+      source: VALID_SOURCE_G,
+      destination: VALID_DESTINATION_G,
+      amount: '10.0000000',
+      asset: NATIVE_XLM_FIXTURE,
+    };
+
+    it('preserves valid typed ID and hash memos through intent creation', () => {
+      const idMemo = { type: 'id' as const, value: '18446744073709551615' };
+      const idIntent = createPaymentIntent({ ...validParams, memo: idMemo });
+      expect(idIntent.status).toBe('valid');
+      expect(idIntent.memo).toEqual(idMemo);
+      expect(idIntent.validationResult?.issues).toHaveLength(0);
+
+      const hashMemo = { type: 'hash' as const, value: 'ab'.repeat(32) };
+      const hashIntent = createPaymentIntent({ ...validParams, memo: hashMemo });
+      expect(hashIntent.status).toBe('valid');
+      expect(hashIntent.memo).toEqual(hashMemo);
+    });
+
+    it('returns memo validation issues for malformed and unsupported structured memos', () => {
+      const malformed = createPaymentIntent({
+        ...validParams,
+        memo: { type: 'id', value: '-1' },
+      });
+      expect(malformed.status).toBe('invalid');
+      expect(malformed.validationResult?.issues).toContainEqual(
+        expect.objectContaining({ field: 'memo', code: 'INVALID_MEMO', reason: 'invalid_format' }),
+      );
+
+      // Bypass the static type deliberately to verify the runtime trust boundary.
+      const unsupported = createPaymentIntent({
+        ...validParams,
+        memo: { type: 'binary' as 'text', value: '1234' },
+      });
+      expect(unsupported.status).toBe('invalid');
+      expect(unsupported.validationResult?.issues).toContainEqual(
+        expect.objectContaining({ field: 'memo', code: 'INVALID_MEMO' }),
+      );
+    });
+
+    it('rejects malformed falsey runtime memos instead of skipping validation', () => {
+      // External JavaScript/JSON inputs can violate the TypeScript MemoInput contract.
+      for (const memo of [0, false, NaN] as const) {
+        const intent = createPaymentIntent({ ...validParams, memo: memo as never });
+        expect(intent.status).toBe('invalid');
+        expect(intent.validationResult?.issues).toContainEqual(
+          expect.objectContaining({ field: 'memo', code: 'INVALID_MEMO' }),
+        );
+      }
+    });
+
+    it('keeps the legacy string trim behavior and explicit no-memo shape', () => {
+      const textIntent = createPaymentIntent({ ...validParams, memo: '  invoice  ' });
+      expect(textIntent.memo).toBe('invoice');
+      const noneIntent = createPaymentIntent({ ...validParams, memo: { type: 'none' } });
+      expect(noneIntent.status).toBe('valid');
+      expect(noneIntent.memo).toEqual({ type: 'none' });
+    });
+  });
+
   describe('Trustline Check Strategy', () => {
     it('returns hasTrustline = true for Native XLM without network lookup', async () => {
       const intent = createPaymentIntent({

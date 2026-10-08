@@ -1,4 +1,5 @@
 import { Asset, IssuedAsset } from './asset';
+import type { MemoInput } from './index';
 
 /** Status of a payment intent lifecycle */
 export type PaymentIntentStatus =
@@ -67,7 +68,7 @@ export interface PaymentIntent {
   /** Optional asset metadata */
   assetMetadata?: AssetMetadata;
   /** Optional transaction memo */
-  memo?: string;
+  memo?: string | MemoInput;
   /** Current status of intent */
   status: PaymentIntentStatus;
   /** Asset state classification */
@@ -95,7 +96,7 @@ export interface CreatePaymentIntentParams {
   /** Optional asset metadata (name, domain, decimals, icon) */
   assetMetadata?: AssetMetadata;
   /** Optional memo */
-  memo?: string;
+  memo?: string | MemoInput;
   /** Optional caller metadata */
   metadata?: Record<string, unknown>;
   /** Strategy for trustline validation (default: 'auto_check') */

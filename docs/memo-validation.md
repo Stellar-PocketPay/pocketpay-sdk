@@ -91,6 +91,19 @@ Reasons are distinct so callers can tell an unsupported *format* from a payload
 that is merely too long — previously both surfaced as "Memo text exceeds
 28-byte limit".
 
+## Payment intents
+
+`createPaymentIntent` and `validatePaymentIntent` accept the same plain-string
+or structured `MemoInput` shapes as the send helpers. For example,
+`createPaymentIntent({ ...params, memo: { type: 'id', value: '42' } })`
+preserves the ID memo rather than trying to trim it like a string.
+
+Malformed or unsupported memo types produce a `PaymentIntentValidationIssue`
+with `field: 'memo'` and `code: 'INVALID_MEMO'` and mark the intent
+invalid. This is a non-throwing intent validation result, unlike
+`validateMemoInput`, which throws a typed `PocketPayError` directly.
+Plain-text memos retain the previous trim behavior.
+
 ## Previews
 
 `previewPayment` reports the memo alongside its type, mirroring how
