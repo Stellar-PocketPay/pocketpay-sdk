@@ -173,10 +173,54 @@ When building customer-facing interfaces, translate machine-readable SDK error c
 
 ---
 
+## Typed Payment Failure Categories
+
+`sendXLM` and `sendAsset` normalize payment-path failures to `PaymentError`,
+which extends `PocketPayError`. Existing `code` values remain available for
+fine-grained compatibility, while `paymentCategory` provides a stable recovery
+category that applications can branch on without parsing provider messages.
+
+| `paymentCategory` | Meaning | Typical application action |
+| :--- | :--- | :--- |
+| `VALIDATION` | Local input validation failed | Correct the highlighted input; do not retry unchanged |
+| `NETWORK` | Horizon/network transport failed before a definitive submission result | Retry with backoff when appropriate |
+| `ACCOUNT` | Source/destination account is unavailable or unfunded | Fund or correct the account |
+| `ASSET` | Asset/trustline state prevents the payment | Fix issuer/trustline/capacity state |
+| `FEE` | The submitted fee is insufficient | Rebuild with an adequate fee |
+| `SUBMISSION` | Submission was rejected or its final outcome requires transaction handling | Follow the specific `code`; never infer success from transport state |
+
+Use `paymentCategory` for the recovery branch, `code` for the specific SDK
+condition, and `safeMessage` for user-facing copy. Payment classification
+redacts secret-shaped material from normalized messages and causes. Validation
+metadata is copied through an allowlist of the documented `field`, `reason`, and
+safe primitive `value` fields; unreadable or undeclared runtime metadata is dropped.
+Applications should still avoid logging raw provider errors or payment arguments.
+
+```typescript
+import {
+  PaymentError,
+  PaymentFailureCategory,
+  sendXLM,
+} from '@axionvera/pocketpay-sdk';
+
+try {
+  await sendXLM(params);
+} catch (error) {
+  if (error instanceof PaymentError) {
+    if (error.paymentCategory === PaymentFailureCategory.Network && error.retryable) {
+      scheduleRetry();
+    } else {
+      showError(error.safeMessage ?? 'Payment failed.');
+    }
+  }
+}
+```
+
 ## Payment Helper Error Reference
 
-Both `sendXLM` and `sendAsset` throw `PocketPayError` on failure. Branch on
-`error.code` — not `error.message` — and inspect `error.validation` for
+Both `sendXLM` and `sendAsset` throw `PaymentError` (a `PocketPayError`
+subclass) on failure. Branch on `error.paymentCategory` for the recovery class,
+then `error.code` for fine-grained handling. Inspect `error.validation` for
 field-level detail when present.
 
 ### Preflight validation (no network call)

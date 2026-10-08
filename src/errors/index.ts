@@ -1,5 +1,15 @@
 export type { ResultWarning, RecoveryHint } from '../types';
 
+export {
+  PaymentErrorCode,
+  PaymentParseError,
+  PaymentFailureCategory,
+  PaymentError,
+  classifyPaymentError,
+  isPaymentError,
+} from './payment-errors';
+export type { PaymentErrorOptions } from './payment-errors';
+
 // ─── Error Classification ───────────────────────────────────────────────────
 
 import { PocketPayError, SubmissionOutcome } from '../types';

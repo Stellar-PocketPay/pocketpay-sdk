@@ -353,6 +353,12 @@ export type { EndpointReachability } from './network';
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 export {
+  PaymentErrorCode,
+  PaymentParseError,
+  PaymentFailureCategory,
+  PaymentError,
+  classifyPaymentError,
+  isPaymentError,
   classifySubmitError,
   isRetryableError,
   isUnknownStatusError,
@@ -382,6 +388,8 @@ export {
   listCapabilities,
   assertCapability,
 } from './errors';
+
+export type { PaymentErrorOptions } from './errors';
 
 // ─── Diagnostics (opt-in, redacted) ─────────────────────────────────────────
 export type {

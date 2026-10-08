@@ -7,6 +7,7 @@ import * as StellarSDK from '@stellar/stellar-sdk';
 import { getHorizonServer, getNetworkPassphrase, resolveConfig } from '../config';
 import { SendXLMParams, SendAssetParams, PaymentResult, PocketPayError, SDKConfig, PocketPayResult, EnhancedPocketPayResult } from '../types';
 import { buildMemo, wrapError, toResult, toEnhancedSuccessResult, toEnhancedFailureResult, toEnhancedResult } from '../utils';
+import { classifyPaymentError } from '../errors';
 import type { ResultWarning, RecoveryHint } from '../errors';
 import { withTimeout } from '../network';
 import { submitWithGuard } from '../transactions/guarded-submit';
@@ -38,13 +39,17 @@ export async function sendXLM(
   // published code below is unchanged. `network` is excluded because this
   // function resolves config itself inside the try block, and moving that would
   // change when a configuration error surfaces relative to the handler below.
-  assertTransactionBuildValid(
-    { sourceSecret, destination, amount, memo },
-    {
-      stages: ['sourceAccount', 'destination', 'amount', 'memo'],
-      selfPaymentMessage: 'Cannot send XLM to yourself',
-    },
-  );
+  try {
+    assertTransactionBuildValid(
+      { sourceSecret, destination, amount, memo },
+      {
+        stages: ['sourceAccount', 'destination', 'amount', 'memo'],
+        selfPaymentMessage: 'Cannot send XLM to yourself',
+      },
+    );
+  } catch (error) {
+    throw classifyPaymentError(error, 'Payment validation failed');
+  }
   const sourceKeypair = StellarSDK.Keypair.fromSecret(sourceSecret);
   const sourcePublic = sourceKeypair.publicKey();
   try {
@@ -93,27 +98,7 @@ export async function sendXLM(
       createdAt: resultObj.created_at || new Date().toISOString(),
     };
   } catch (error) {
-    if (error instanceof PocketPayError) throw error;
-    const horizonError = error as any;
-    // Unfunded / nonexistent source account → clear preflight-style error
-    if (horizonError?.response?.status === 404) {
-      throw new PocketPayError(
-        `Source account not found: ${sourcePublic}. It may not be funded yet.`,
-        'ACCOUNT_NOT_FOUND',
-        404
-      );
-    }
-    // Horizon transaction-failure result codes
-    if (horizonError?.response?.data?.extras?.result_codes) {
-      const codes = horizonError.response.data.extras.result_codes;
-      // Only include transaction result code, not operation details (may contain sensitive data)
-      throw new PocketPayError(
-        `Payment failed with transaction result code: ${codes.transaction}`,
-        'PAYMENT_FAILED',
-        400
-      );
-    }
-    throw wrapError(error, 'Failed to send XLM', 'SEND_ERROR');
+    throw classifyPaymentError(error, 'Failed to send XLM');
   }
 }
 
@@ -331,13 +316,17 @@ export async function sendAsset(
   // duplication was most visible: the identical four validators, plus the asset
   // check. Only the self-payment wording differs between the two flows, so that
   // sentence is passed in rather than the check being repeated.
-  assertTransactionBuildValid(
-    { sourceSecret, destination, amount, asset, memo },
-    {
-      stages: ['sourceAccount', 'destination', 'amount', 'asset', 'memo'],
-      selfPaymentMessage: 'Cannot send asset to yourself',
-    },
-  );
+  try {
+    assertTransactionBuildValid(
+      { sourceSecret, destination, amount, asset, memo },
+      {
+        stages: ['sourceAccount', 'destination', 'amount', 'asset', 'memo'],
+        selfPaymentMessage: 'Cannot send asset to yourself',
+      },
+    );
+  } catch (error) {
+    throw classifyPaymentError(error, 'Payment validation failed');
+  }
 
   const sourceKeypair = StellarSDK.Keypair.fromSecret(sourceSecret);
   const sourcePublic = sourceKeypair.publicKey();
@@ -347,7 +336,11 @@ export async function sendAsset(
 
   // ─── Trustline preflight (issued assets only, network call) ──────────────
   if (!isNative && !skipTrustlineCheck) {
-    await verifyPaymentTrustlineOrThrow(destination, asset, { amount, config });
+    try {
+      await verifyPaymentTrustlineOrThrow(destination, asset, { amount, config });
+    } catch (error) {
+      throw classifyPaymentError(error, 'Payment asset validation failed');
+    }
   }
 
   let transaction: StellarSDK.Transaction | undefined;
@@ -402,27 +395,7 @@ export async function sendAsset(
       asset: isNative ? { code: 'XLM' } : { code: asset.code, issuer: asset.issuer },
     };
   } catch (error) {
-    if (error instanceof PocketPayError) throw error;
-    const horizonError = error as any;
-
-    if (horizonError?.response?.status === 404) {
-      throw new PocketPayError(
-        `Source account not found: ${sourcePublic}. It may not be funded yet.`,
-        'ACCOUNT_NOT_FOUND',
-        404,
-      );
-    }
-
-    if (horizonError?.response?.data?.extras?.result_codes) {
-      const codes = horizonError.response.data.extras.result_codes;
-      throw new PocketPayError(
-        `Payment failed with transaction result code: ${codes.transaction}`,
-        'PAYMENT_FAILED',
-        400,
-      );
-    }
-
-    throw wrapError(error, 'Failed to send asset', 'SEND_ERROR');
+    throw classifyPaymentError(error, 'Failed to send asset');
   }
 }
 
