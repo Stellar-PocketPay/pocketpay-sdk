@@ -184,6 +184,23 @@ The PocketPay SDK handles sensitive cryptographic keys and financial transaction
 
 ---
 
+## Public SDK API compatibility
+
+The root public import surface and package entrypoints are versioned and reviewed.
+When editing `src/index.ts`, `package.json` exports, or consumer-visible
+signatures, read [Public API Governance](./docs/public-api-governance.md).
+
+- Run `npm run check:public-api` to detect accidental root export/subpath drift.
+- Review declaration/signature and runtime compatibility separately; the snapshot
+  deliberately does not assert unchanged signatures or behavior.
+- Only after an approved public API change, run `npm run update:public-api`
+  and include the reviewed snapshot diff, migration notes, and release impact.
+- Use `npm run check:public-api:smoke` to check the governance parser's
+  focused fixtures, without running unrelated suites.
+- Use package-root imports in all new consumer examples, not private deep paths.
+
+---
+
 ## Pull Request Checklist
 
 Before opening a PR, run through this list:

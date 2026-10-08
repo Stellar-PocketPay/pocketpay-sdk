@@ -33,7 +33,10 @@
     "verify:pr": "tsx scripts/verify-acceptance.ts",
     "prepack": "npm run build",
     "prepublishOnly": "npm run build",
-    "test:smoke": "npm run build && tsx scripts/smoke-test.ts"
+    "test:smoke": "npm run build && tsx scripts/smoke-test.ts",
+    "check:public-api": "tsx scripts/check-public-api.ts",
+    "update:public-api": "tsx scripts/check-public-api.ts --update",
+    "check:public-api:smoke": "tsx scripts/check-public-api.ts --self-test"
   },
   "repository": {
     "type": "git",

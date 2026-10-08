@@ -1,0 +1,37 @@
+name: Public SDK API surface
+
+on:
+  pull_request:
+    paths:
+      - 'src/index.ts'
+      - 'package.json'
+      - 'scripts/check-public-api.ts'
+      - 'docs/public-api-surface.snapshot.json'
+      - '.github/workflows/public-api-drift.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/index.ts'
+      - 'package.json'
+      - 'scripts/check-public-api.ts'
+      - 'docs/public-api-surface.snapshot.json'
+      - '.github/workflows/public-api-drift.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Focused export contract and parser fixtures
+        run: |
+          npm run check:public-api
+          npm run check:public-api:smoke
