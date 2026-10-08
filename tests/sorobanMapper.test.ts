@@ -212,6 +212,48 @@ describe('Soroban Invocation Result Mapper', () => {
       });
     });
 
+    it('maps get_balance above 2^53 stroops exactly (#307)', () => {
+      // Number()/parseFloat gave 900719925.4740992 and 9007199254740992.
+      expect(mapVaultInvocationResult('get_balance', 9007199254740993n)).toMatchObject({
+        balance: '900719925.4740993',
+        rawStroops: '9007199254740993',
+      });
+      expect(
+        mapVaultInvocationResult('get_balance', { success: true, balance: '900719925.4740993' })
+      ).toMatchObject({ balance: '900719925.4740993', rawStroops: '9007199254740993' });
+      expect(
+        mapVaultInvocationResult('get_balance', { success: true, balance: '9223372036854775807' })
+      ).toMatchObject({ balance: '922337203685.4775807', rawStroops: '9223372036854775807' });
+    });
+
+    it('fails closed for an unsafe numeric get_balance value (#307)', () => {
+      const mapped = mapVaultInvocationResult('get_balance', Number.MAX_SAFE_INTEGER + 1);
+      expect(mapped).toMatchObject({
+        success: false,
+        status: 'error',
+        operation: 'get_balance',
+        errorCode: 'SOROBAN_INVALID_RESPONSE',
+      });
+      expect(mapped.balance).toBeUndefined();
+      expect(mapped.rawStroops).toBeUndefined();
+    });
+
+    it('fails closed for malformed string get_balance values (#307)', () => {
+      for (const balance of ['not-a-balance.0', '12stroops', '-1']) {
+        expect(() =>
+          mapVaultInvocationResult('get_balance', { success: true, balance })
+        ).not.toThrow();
+        expect(
+          mapVaultInvocationResult('get_balance', { success: true, balance })
+        ).toMatchObject({
+          success: false,
+          status: 'error',
+          operation: 'get_balance',
+          errorCode: 'SOROBAN_INVALID_RESPONSE',
+        });
+      }
+    });
+
     it('maps successful deposit operation', () => {
       const raw = { status: 'SUCCESS', hash: 'deposithash' };
       const mapped = mapVaultInvocationResult('deposit', raw, { amount: '100', contractId: 'C123' });

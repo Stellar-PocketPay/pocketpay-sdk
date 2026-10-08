@@ -157,6 +157,39 @@ describe('Multi-Asset Balance Model', () => {
       }
     });
 
+    it('keeps high-range wallet balances exact to the stroop (#307)', () => {
+      const horizonData = {
+        subentry_count: 0,
+        balances: [
+          {
+            asset_type: 'native',
+            balance: '922337203685.4775807',
+            selling_liabilities: '0.0000001',
+          },
+          {
+            asset_type: 'credit_alphanum4',
+            asset_code: 'USDC',
+            asset_issuer: issuerPublicKey,
+            balance: '922337203685.4775807',
+            selling_liabilities: '0.0000001',
+            limit: '922337203685.4775807',
+            is_authorized: true,
+          },
+        ],
+      };
+
+      const result = parseMultiAssetBalance(publicKey, horizonData, 'funded');
+
+      expect(result.native?.reservedBalance).toBe('1.0000001');
+      expect(result.native?.availableBalance).toBe('922337203684.4775806');
+      expect(result.native?.formattedDisplay).toBe('922337203684.48 XLM');
+
+      const usdc = result.issuedAssets[0];
+      expect(usdc.reservedBalance).toBe('0.0000001');
+      expect(usdc.availableBalance).toBe('922337203685.4775806');
+      expect(formatAssetBalanceDisplay(usdc, 7)).toBe('922337203685.4775806 USDC');
+    });
+
     it('handles unknown or unparseable asset types gracefully', () => {
       const horizonData = {
         balances: [

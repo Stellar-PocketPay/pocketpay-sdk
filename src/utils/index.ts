@@ -181,6 +181,22 @@ export function validateAmount(amount: string): boolean {
       }
     );
   }
+  // A syntactically valid amount can still exceed Stellar's signed int64
+  // stroop range. Never ignore the safe parser's rejected result: the shared
+  // payment/vault validator must fail closed before any transaction is built.
+  if (!parsed.valid) {
+    throw new PocketPayError(
+      `Invalid amount: "${amount}". Exceeds the maximum Stellar amount.`,
+      'INVALID_AMOUNT',
+      {
+        validation: {
+          field: 'amount',
+          reason: parsed.error.validation?.reason ?? 'invalid_amount',
+          value: amount
+        }
+      }
+    );
+  }
   return true;
 }
 

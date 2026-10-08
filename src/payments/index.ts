@@ -7,6 +7,7 @@ import * as StellarSDK from '@stellar/stellar-sdk';
 import { getHorizonServer, getNetworkPassphrase, resolveConfig } from '../config';
 import { SendXLMParams, SendAssetParams, PaymentResult, PocketPayError, SDKConfig, PocketPayResult, EnhancedPocketPayResult } from '../types';
 import { buildMemo, wrapError, toResult, toEnhancedSuccessResult, toEnhancedFailureResult, toEnhancedResult } from '../utils';
+import { toStroops } from '../utils/amount';
 import type { ResultWarning, RecoveryHint } from '../errors';
 import { withTimeout } from '../network';
 import { submitWithGuard } from '../transactions/guarded-submit';
@@ -151,9 +152,12 @@ export async function enhancedSendXLM(
   try {
     const result = await sendXLM(params, config);
 
-    const feeNum = parseFloat(result.fee);
-    const amountNum = parseFloat(amount);
-    if (amountNum > 0 && feeNum / amountNum > 0.1) {
+    // Horizon reports fee_charged in stroops while amount is an XLM decimal.
+    // Compare like units exactly: multiplying the fee by 10 avoids division and
+    // flags only fees strictly greater than 10% of the payment amount.
+    const feeStroops = /^\d+$/.test(result.fee) ? BigInt(result.fee) : null;
+    const amountStroops = toStroops(amount);
+    if (feeStroops !== null && feeStroops * 10n > amountStroops) {
       warnings.push({
         code: 'HIGH_FEE_RATIO',
         message: `Transaction fee (${result.fee} stroops) is more than 10% of the payment amount.`,

@@ -317,6 +317,18 @@ describe('Destination Validation - Network Validation', () => {
       expect(result.metadata?.limit).toBe('1000');
     });
 
+    it('rejects an explicitly supplied empty amount before any Horizon lookup', async () => {
+      const options: DestinationValidationOptions = {
+        asset: { code: 'USDC', issuer: issuerPublicKey },
+        amount: '',
+      };
+
+      await expect(
+        validateDestinationNetwork(validPublicKey, options),
+      ).rejects.toMatchObject({ code: 'INVALID_AMOUNT' });
+      expect(mockLoadAccount).not.toHaveBeenCalled();
+    });
+
     it('should detect trustline limit exceeded', async () => {
       mockLoadAccount.mockResolvedValue({
         sequence: '123456789',
@@ -369,6 +381,50 @@ describe('Destination Validation - Network Validation', () => {
       const result = await validateDestinationNetwork(validPublicKey, options);
       expect(result.valid).toBe(true);
       expect(result.status).toBe('valid_network');
+    });
+
+    it('compares trustline capacity in exact stroops, not floats (#307)', async () => {
+      const trustline = (balance: string, limit: string) => ({
+        sequence: '123456789',
+        balances: [
+          {
+            asset_type: 'credit_alphanum4',
+            asset_code: 'USDC',
+            asset_issuer: issuerPublicKey,
+            balance,
+            limit,
+            is_authorized: true,
+            is_authorized_to_maintain_liabilities: true,
+          },
+        ],
+      });
+      const asset = { code: 'USDC', issuer: issuerPublicKey };
+
+      mockLoadAccount.mockResolvedValueOnce(trustline('0.0000000', '922337203685.4775807'));
+      const fresh = await validateDestinationNetwork(validPublicKey, { asset, amount: '1' });
+      expect(fresh.valid).toBe(true);
+      expect(fresh.metadata?.availableCapacity).toBe('922337203685.4775807');
+
+      mockLoadAccount.mockResolvedValueOnce(trustline('0.1000000', '0.3000000'));
+      const exactFill = await validateDestinationNetwork(validPublicKey, { asset, amount: '0.2' });
+      expect(exactFill.valid).toBe(true);
+      expect(exactFill.status).toBe('valid_network');
+
+      mockLoadAccount.mockResolvedValueOnce(trustline('899999999999.9999000', '900000000000.0000000'));
+      const overflow = await validateDestinationNetwork(validPublicKey, { asset, amount: '0.00011' });
+      expect(overflow.valid).toBe(false);
+      expect(overflow.status).toBe('trustline_limit_exceeded');
+      expect(overflow.metadata?.availableCapacity).toBe('0.0001000');
+    });
+
+    it('rejects a malformed capacity amount before the Horizon lookup (#307)', async () => {
+      const asset = { code: 'USDC', issuer: issuerPublicKey };
+      for (const amount of ['abc', '1e3', '0', '1.12345678', '922337203685.4775808']) {
+        await expect(validateDestinationNetwork(validPublicKey, { asset, amount })).rejects.toBeInstanceOf(
+          PocketPayError,
+        );
+      }
+      expect(mockLoadAccount).not.toHaveBeenCalled();
     });
   });
 

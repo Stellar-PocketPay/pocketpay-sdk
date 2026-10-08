@@ -245,6 +245,14 @@ describe('legacy helpers no longer lose precision silently', () => {
     expect(() => validateAmount('10abc')).toThrow(PocketPayError);
   });
 
+  it('rejects amounts above Stellar int64 stroops through legacy validateAmount', () => {
+    expect(validateAmount(formatStroops(MAX_STROOPS))).toBe(true);
+    const tooBig = formatStroops(MAX_STROOPS + 1n);
+    const error = capture(() => validateAmount(tooBig));
+    expect(error.code).toBe('INVALID_AMOUNT');
+    expect(error.validation?.reason).toBe('exceeds_maximum');
+  });
+
   it('keeps xlmToStroops returning a number for representable amounts', () => {
     expect(xlmToStroops('1')).toBe(10_000_000);
     expect(xlmToStroops('0.0000001')).toBe(1);

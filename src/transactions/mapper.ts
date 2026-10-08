@@ -6,6 +6,7 @@ import {
   RawHorizonOperation,
   TransactionMapperOptions,
 } from '../types/transaction';
+import { safeParseAmount } from '../utils/amount';
 
 /**
  * Maps a raw Horizon transaction to a transaction summary
@@ -172,6 +173,14 @@ function extractAmountAndAsset(
  * Formats a display amount with proper decimal places
  */
 function formatDisplayAmount(amount: string, asset: string): string {
+  // Exact: Horizon amounts are 7-decimal strings, and the shared parser keeps
+  // every digit where parseFloat(...).toFixed(7) rounds above 2^53 stroops.
+  const parsed = safeParseAmount(amount);
+  if (parsed.valid) {
+    return parsed.amount.toString();
+  }
+
+  // Inputs the shared parser rejects keep their previous formatting.
   const numAmount = parseFloat(amount);
   
   if (isNaN(numAmount)) {

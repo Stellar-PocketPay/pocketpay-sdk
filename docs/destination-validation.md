@@ -299,6 +299,13 @@ const result = await validateDestinationNetwork(destination, {
 // result.metadata.availableCapacity === '100.0000000'
 ```
 
+`availableCapacity` is `limit - balance` computed in exact stroops with the
+shared amount model (see [Amount Model](./amount-model.md)) and formatted to 7
+decimal places. When `amount` is provided it is checked with `validateAmount`
+before the Horizon lookup, so a malformed, zero, over-precise or above-maximum
+amount throws `INVALID_AMOUNT` / `INVALID_AMOUNT_PRECISION` instead of being
+compared against the capacity.
+
 **Recommended action:** Inform the user of the available capacity and suggest a smaller payment amount or ask the recipient to increase their trustline limit.
 
 ## Best Practices

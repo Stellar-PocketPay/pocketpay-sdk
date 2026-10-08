@@ -124,6 +124,18 @@ describe('Utils Module', () => {
         expect.objectContaining({ code: 'INVALID_AMOUNT_PRECISION' })
       );
     });
+    it('rejects values above the signed int64 stroop limit', () => {
+      expect(validateAmount('922337203685.4775807')).toBe(true);
+      expect(() => validateAmount('922337203685.4775808')).toThrow(
+        expect.objectContaining({
+          code: 'INVALID_AMOUNT',
+          validation: expect.objectContaining({ reason: 'exceeds_maximum' }),
+        })
+      );
+      expect(() => validateAmount('922337203686')).toThrow(
+        expect.objectContaining({ code: 'INVALID_AMOUNT' })
+      );
+    });
   });
 
   describe('validateMemo', () => {

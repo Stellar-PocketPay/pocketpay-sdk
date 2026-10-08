@@ -15,7 +15,33 @@ import {
   PocketPayResult,
 } from '../types';
 import { validatePublicKey, validateAmount, wrapError, toResult } from '../utils';
+import { formatStroops, safeParseAmount, toStroops } from '../utils/amount';
 import { withTimeout } from '../network';
+
+/**
+ * Remaining capacity of a trustline (`limit - balance`), in exact stroops.
+ *
+ * Horizon reports trustline balances and limits as 7-decimal strings. They are
+ * read with the shared amount model rather than `parseFloat`: a float
+ * subtraction misstates the default limit (`922337203685.4775807`), rejects a
+ * payment that exactly fills the remaining capacity (`0.3 - 0.1 < 0.2`), and
+ * near the top of the range can let a payment that overflows the trustline
+ * pass. A value that does not parse yields zero capacity, so a capacity check
+ * fails closed instead of comparing against `NaN`.
+ *
+ * @param limit - Trustline limit as reported by Horizon
+ * @param balance - Current trustline balance as reported by Horizon
+ * @returns Remaining capacity in stroops, never negative
+ */
+export function remainingTrustlineCapacity(limit: string, balance: string): bigint {
+  const parsedLimit = safeParseAmount(String(limit));
+  const parsedBalance = safeParseAmount(String(balance));
+  if (!parsedLimit.valid || !parsedBalance.valid) {
+    return 0n;
+  }
+  const remaining = parsedLimit.amount.stroops - parsedBalance.amount.stroops;
+  return remaining > 0n ? remaining : 0n;
+}
 
 /**
  * Validates the format and parameters of a Stellar asset specification locally.
@@ -101,7 +127,7 @@ export async function checkDestinationTrustline(
   validatePublicKey(destination);
   validateAssetSpec(asset);
 
-  if (options?.amount) {
+  if (options?.amount !== undefined) {
     validateAmount(options.amount);
   }
 
@@ -164,14 +190,12 @@ export async function checkDestinationTrustline(
       };
     }
 
-    const curNum = parseFloat(currentBalance);
-    const limitNum = parseFloat(limit);
-    const availableCapacityNum = Math.max(0, limitNum - curNum);
-    const availableCapacity = availableCapacityNum.toFixed(7);
+    const capacityStroops = remainingTrustlineCapacity(limit, currentBalance);
+    const availableCapacity = formatStroops(capacityStroops);
 
-    if (options?.amount) {
-      const sendNum = parseFloat(options.amount);
-      if (sendNum > availableCapacityNum) {
+    if (options?.amount !== undefined) {
+      // options.amount passed validateAmount above, so the exact parse cannot throw.
+      if (toStroops(options.amount) > capacityStroops) {
         return {
           valid: false,
           status: 'limit_exceeded',

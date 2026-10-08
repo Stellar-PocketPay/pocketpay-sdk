@@ -179,6 +179,21 @@ describe('Transaction Mapper', () => {
       expect(typeof summary.amountDisplay).toBe('string');
     });
 
+    it('formats large amounts exactly with the shared amount model (#307)', () => {
+      const withAmount = (amount: string): RawHorizonTransaction => ({
+        ...mockIncomingTransaction,
+        operations: [{ ...mockIncomingTransaction.operations[0], amount }],
+      });
+      const display = (amount: string) =>
+        mapTransactionToSummary(withAmount(amount), { userAccount: mockUserAccount }).amountDisplay;
+
+      expect(display('10.5')).toBe('10.5000000');
+      // parseFloat(...).toFixed(7) printed 922337203685.4775391 and 900719925.4740992.
+      expect(display('922337203685.4775807')).toBe('922337203685.4775807');
+      expect(display('900719925.4740993')).toBe('900719925.4740993');
+      expect(display('not-a-number')).toBe('0.00');
+    });
+
     it('should handle missing operations gracefully', () => {
       const emptyOpTransaction = {
         ...mockIncomingTransaction,

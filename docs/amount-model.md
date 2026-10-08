@@ -88,8 +88,10 @@ negative result (`negative_result`). `equals` and `compare` work on value, so
 `validateAmount`, `stroopsToXLM` and `xlmToStroops` remain exported with their
 existing signatures. They no longer lose precision silently:
 
-- **`validateAmount`** — unchanged behaviour and error codes; exactness is now
-  delegated to the shared parser.
+- **`validateAmount`** — delegates precision and range to the shared parser; retains
+  `INVALID_AMOUNT_PRECISION` for more than 7 decimal places, and `INVALID_AMOUNT`
+  for invalid format, zero or values above signed int64 stroops. An overflow
+  cannot silently pass legacy payment or vault validation.
 - **`stroopsToXLM`** — exact across the whole range; rejects a `number` that is
   not a safe integer instead of rounding it. Pass large values as strings.
 - **`xlmToStroops`** — **deprecated.** Still returns a `number`, but now throws
@@ -110,6 +112,22 @@ Both vault paths — `depositToVault` and `withdrawFromVault` in
 `src/soroban/index.ts` — convert with `toStroops()` and encode the `bigint`
 directly as `i128`. They previously used
 `Math.round(parseFloat(amount) * 10_000_000)`.
+
+The destination trustline capacity checks — `checkDestinationTrustline` in
+`src/payments/trustline.ts` and `validateDestinationNetwork` in
+`src/payments/destination-validation.ts` — read Horizon's `balance` and `limit`
+with the shared parser and compare `limit - balance` against the payment amount
+in stroops. `availableCapacity` is formatted with `formatStroops`, so the default
+trustline limit reports `922337203685.4775807` rather than a float-rounded value,
+and a payment that exactly fills the remaining capacity is accepted. Both helpers
+run `validateAmount` on the amount before the Horizon lookup.
+
+Results are formatted with the same model. The vault `get_balance` mapping
+(`mapVaultInvocationResult` in `src/soroban/mapper.ts`) builds `balance` with
+`formatStroops` and `rawStroops` with the exact parser, and transaction history
+(`amountDisplay` in `src/transactions/mapper.ts`) prints Horizon amounts through
+`parseAmount`. Balances and amounts above 2^53 stroops (about 900 million XLM)
+keep every digit instead of being rounded through `Number`.
 
 ## See also
 

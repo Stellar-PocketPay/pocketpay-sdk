@@ -40,7 +40,9 @@ import {
   PocketPayResult,
 } from '../types';
 import { validatePublicKey, validateAmount, wrapError, toResult } from '../utils';
+import { formatStroops, toStroops } from '../utils/amount';
 import { withTimeout } from '../network';
+import { remainingTrustlineCapacity } from './trustline';
 
 // ─── Type Definitions ───────────────────────────────────────────────────────────
 
@@ -278,6 +280,13 @@ export async function validateDestinationNetwork(
     return localResult;
   }
 
+  // Same amount preflight as checkDestinationTrustline: a malformed, zero,
+  // over-precise or above-maximum amount is rejected before any network call
+  // rather than being compared as NaN against the trustline capacity.
+  if (options?.amount !== undefined) {
+    validateAmount(options.amount);
+  }
+
   const config = options?.config;
   const cfg = resolveConfig(config);
   const server = getHorizonServer(config);
@@ -357,15 +366,14 @@ export async function validateDestinationNetwork(
           };
         }
 
-        // Capacity check when amount is provided
-        if (options?.amount) {
-          const curNum = parseFloat(currentBalance);
-          const limitNum = parseFloat(limit);
-          const availableCapacityNum = Math.max(0, limitNum - curNum);
-          const availableCapacity = availableCapacityNum.toFixed(7);
+        // Remaining capacity in exact stroops through the shared amount model
+        // (options.amount was checked with validateAmount before the lookup).
+        const capacityStroops = remainingTrustlineCapacity(limit, currentBalance);
+        const availableCapacity = formatStroops(capacityStroops);
 
-          const sendNum = parseFloat(options.amount);
-          if (sendNum > availableCapacityNum) {
+        // Capacity check when amount is provided
+        if (options?.amount !== undefined) {
+          if (toStroops(options.amount) > capacityStroops) {
             return {
               valid: false,
               status: 'trustline_limit_exceeded',
@@ -397,7 +405,7 @@ export async function validateDestinationNetwork(
             sequence: account.sequence,
             currentBalance,
             limit,
-            availableCapacity: Math.max(0, parseFloat(limit) - parseFloat(currentBalance)).toFixed(7),
+            availableCapacity,
             isAuthorized: true,
           },
         };

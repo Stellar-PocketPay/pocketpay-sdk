@@ -6,7 +6,7 @@
  * the ACCOUNT_NOT_FOUND mapping can be exercised offline.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { sendXLM, sendAsset, safeSendAsset, createWallet, PocketPayError } from '../src';
+import { sendXLM, enhancedSendXLM, sendAsset, safeSendAsset, createWallet, PocketPayError } from '../src';
 import type { SendAssetParams } from '../src';
 import { fundedAccount, paymentList } from './fixtures';
 // ─── Mock @stellar/stellar-sdk ───────────────────────────────────────────────
@@ -88,6 +88,38 @@ describe('Payments Module - Validation', () => {
     await expect(
       sendXLM({ sourceSecret: sender.secretKey, destination: receiver.publicKey, amount: '10' })
     ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
+  });
+
+  it('compares enhanced fee ratio in stroops instead of mixing stroops and XLM (#307)', async () => {
+    const sender = createWallet();
+    const receiver = createWallet();
+    const { Account } = await import('@stellar/stellar-sdk');
+
+    mockSubmitTransaction.mockReset();
+    mockLoadAccount
+      .mockResolvedValueOnce(new Account(sender.publicKey, '100'))
+      .mockResolvedValueOnce(new Account(sender.publicKey, '101'));
+    mockSubmitTransaction
+      .mockResolvedValueOnce({ hash: 'normal-fee', ledger: 1, fee_charged: '100' })
+      .mockResolvedValueOnce({ hash: 'high-fee', ledger: 2, fee_charged: '100' });
+
+    const normal = await enhancedSendXLM({
+      sourceSecret: sender.secretKey,
+      destination: receiver.publicKey,
+      amount: '1',
+    });
+    expect(normal.ok).toBe(true);
+    expect(normal.warnings).toBeUndefined();
+
+    const tiny = await enhancedSendXLM({
+      sourceSecret: sender.secretKey,
+      destination: receiver.publicKey,
+      amount: '0.0000010',
+    });
+    expect(tiny.ok).toBe(true);
+    expect(tiny.warnings).toEqual([
+      expect.objectContaining({ code: 'HIGH_FEE_RATIO' }),
+    ]);
   });
 
   it('should not expose sensitive operation data in payment failure errors', async () => {

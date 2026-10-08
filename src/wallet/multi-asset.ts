@@ -20,8 +20,31 @@ import {
 } from '../types';
 import { PocketPayError } from '../types';
 import { validatePublicKey, wrapError, toSuccessResult, toFailureResult } from '../utils';
+import { formatStroops, safeParseAmount } from '../utils/amount';
 import { getHorizonServer, resolveConfig } from '../config';
 import { withTimeout } from '../network';
+
+function parseStroopsOrNull(value: string): bigint | null {
+  const parsed = safeParseAmount(value);
+  return parsed.valid ? parsed.amount.stroops : null;
+}
+
+function formatDisplayStroops(stroops: bigint, decimals: number): string {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 100) {
+    throw new RangeError('decimals must be an integer between 0 and 100');
+  }
+  if (decimals === 7) return formatStroops(stroops);
+  if (decimals > 7) return formatStroops(stroops) + '0'.repeat(decimals - 7);
+
+  const divisor = 10n ** BigInt(7 - decimals);
+  const rounded = (stroops + divisor / 2n) / divisor;
+  if (decimals === 0) return rounded.toString();
+
+  const scale = 10n ** BigInt(decimals);
+  const whole = rounded / scale;
+  const fraction = (rounded % scale).toString().padStart(decimals, '0');
+  return `${whole}.${fraction}`;
+}
 
 /**
  * Calculates Stellar protocol XLM reserves based on subentry count.
@@ -103,23 +126,31 @@ export function parseMultiAssetBalance(
       const sellingLiabilities = typeof bal.selling_liabilities === 'string' ? bal.selling_liabilities : '0.0000000';
       const buyingLiabilities = typeof bal.buying_liabilities === 'string' ? bal.buying_liabilities : '0.0000000';
 
-      const totalNum = parseFloat(totalBalance);
-      const minReserveNum = parseFloat(reserves.minBalance);
-      const sellingNum = parseFloat(sellingLiabilities);
-      const reservedNum = minReserveNum + sellingNum;
-      const availableNum = Math.max(0, totalNum - reservedNum);
+      const totalStroops = parseStroopsOrNull(totalBalance);
+      const minReserveStroops = parseStroopsOrNull(reserves.minBalance);
+      const sellingStroops = parseStroopsOrNull(sellingLiabilities);
+      const safeTotalStroops = totalStroops ?? 0n;
+      const arithmeticValid = totalStroops !== null
+        && minReserveStroops !== null
+        && sellingStroops !== null;
+      const reservedStroops = arithmeticValid
+        ? minReserveStroops + sellingStroops
+        : safeTotalStroops;
+      const availableStroops = arithmeticValid && safeTotalStroops > reservedStroops
+        ? safeTotalStroops - reservedStroops
+        : 0n;
 
-      const availableBalance = availableNum.toFixed(7);
-      const reservedBalance = reservedNum.toFixed(7);
+      const availableBalance = formatStroops(availableStroops);
+      const reservedBalance = formatStroops(reservedStroops);
 
       let state: AssetBalanceState = 'available';
-      if (availableNum <= 0 && totalNum > 0) {
+      if (availableStroops === 0n && safeTotalStroops > 0n) {
         state = 'reserved';
-      } else if (totalNum === 0) {
+      } else if (safeTotalStroops === 0n) {
         state = 'unavailable';
       }
 
-      const formattedDisplay = `${availableNum.toFixed(2)} XLM`;
+      const formattedDisplay = `${formatDisplayStroops(availableStroops, 2)} XLM`;
 
       nativeItem = {
         type: 'native',
@@ -143,24 +174,29 @@ export function parseMultiAssetBalance(
 
       const isAuthorized = bal.is_authorized !== false && bal.is_authorized_to_maintain_liabilities !== false;
 
-      const totalNum = parseFloat(totalBalance);
-      const sellingNum = parseFloat(sellingLiabilities);
-      const availableNum = Math.max(0, totalNum - sellingNum);
+      const totalStroops = parseStroopsOrNull(totalBalance);
+      const sellingStroops = parseStroopsOrNull(sellingLiabilities);
+      const safeTotalStroops = totalStroops ?? 0n;
+      const arithmeticValid = totalStroops !== null && sellingStroops !== null;
+      const reservedStroops = arithmeticValid ? sellingStroops : safeTotalStroops;
+      const availableStroops = arithmeticValid && safeTotalStroops > reservedStroops
+        ? safeTotalStroops - reservedStroops
+        : 0n;
 
-      const availableBalance = availableNum.toFixed(7);
-      const reservedBalance = sellingNum.toFixed(7);
+      const availableBalance = formatStroops(availableStroops);
+      const reservedBalance = formatStroops(reservedStroops);
 
       let state: AssetBalanceState = 'available';
       if (!isAuthorized) {
         state = 'unauthorized';
-      } else if (availableNum <= 0 && totalNum > 0) {
+      } else if (availableStroops === 0n && safeTotalStroops > 0n) {
         state = 'reserved';
-      } else if (totalNum === 0) {
+      } else if (safeTotalStroops === 0n) {
         state = 'available';
       }
 
       const statusTag = !isAuthorized ? ' (Unauthorized)' : '';
-      const formattedDisplay = `${availableNum.toFixed(2)} ${assetCode}${statusTag}`;
+      const formattedDisplay = `${formatDisplayStroops(availableStroops, 2)} ${assetCode}${statusTag}`;
 
       issuedAssets.push({
         type: 'issued',
@@ -279,14 +315,20 @@ export function formatAssetBalanceDisplay(
   decimals: number = 2,
 ): string {
   if (item.type === 'native') {
-    const amount = parseFloat(item.availableBalance);
-    return `${amount.toFixed(decimals)} XLM`;
+    const stroops = parseStroopsOrNull(item.availableBalance);
+    const amount = stroops === null
+      ? item.availableBalance
+      : formatDisplayStroops(stroops, decimals);
+    return `${amount} XLM`;
   }
 
   if (item.type === 'issued') {
-    const amount = parseFloat(item.availableBalance);
+    const stroops = parseStroopsOrNull(item.availableBalance);
+    const amount = stroops === null
+      ? item.availableBalance
+      : formatDisplayStroops(stroops, decimals);
     const auth = !item.isAuthorized ? ' (Unauthorized)' : '';
-    return `${amount.toFixed(decimals)} ${item.assetCode}${auth}`;
+    return `${amount} ${item.assetCode}${auth}`;
   }
 
   return `${item.totalBalance} ${item.assetCode} (Unknown)`;
