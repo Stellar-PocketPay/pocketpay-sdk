@@ -10,7 +10,9 @@ This guide helps PocketPay SDK consumers handle transient failures from Stellar 
 
 Stellar network calls can fail for different reasons. Some failures are temporary and should be retried. Others indicate a problem with the request or account state and should be shown to the user.
 
-## Retryable Errors
+**Submission safety:** The retry/backoff tables and sample below apply to read-only lookups and queries. For a signed transaction submission, HTTP 408/5xx, network drops, and timeouts can leave an *unknown result* even when the server later accepts the payment. Use the SDK's transaction-hash polling/idempotency helper before any new submission. See [Safe Retry Policy](./retry-policy.md).
+
+## Retryable Errors (Read-Only Operations)
 
 These errors are temporary. Retry with exponential backoff (start at 1s, double each retry, max 5 attempts).
 
@@ -76,10 +78,12 @@ These errors indicate a problem the user or developer must fix. Do not retry.
 | tx_insufficient_fee | No | Increase fee |
 | tx_too_late | No | Rebuild with updated ledger bounds |
 | tx_bad_auth | No | Check signatures |
-| Timeout waiting for result | Yes | Poll transaction status |
+| Timeout, HTTP 408/5xx or connection reset during submission | **Unknown — do not resubmit yet** | Poll transaction hash until confirmed, expired or explicitly rejected |
 | TX_STATUS_UNKNOWN | **No** | SDK timeout during submission or confirmation — the outcome is undetermined. Poll before resending; see [Timeout Classification](./timeout-classification.md) |
 
-## Example: Retry with Backoff
+## Example: Retry with Backoff (Read-only Calls Only)
+
+Do not wrap transaction submission in this generic retry helper; use `submitTransactionIdempotently` / `withRetryPolicy` instead.
 
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,

@@ -983,8 +983,9 @@ export type SubmissionOutcome =
       /**
        * Transient failure — the same signed envelope may be resubmitted.
        *
-       * Causes include: HTTP 429 (rate limit), HTTP 503 (service unavailable),
-       * and other recoverable network errors that do not touch on-chain state.
+       * On a transaction submission, only a definite pre-processing
+       * rejection (such as HTTP 429) permits an immediate same-envelope retry.
+       * HTTP 408/5xx and transport interruption require hash polling first.
        */
       kind: 'retryable_failure';
       /** The underlying SDK error. */

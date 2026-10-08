@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as StellarSDK from '@stellar/stellar-sdk';
+import { submitWithGuard } from '../src/transactions/guarded-submit';
 import {
   PocketPayError,
   classifySubmitError,
@@ -179,6 +180,23 @@ describe('Idempotency Strategy - Status Polling & Submission', () => {
     });
 
     expect(mockCall).not.toHaveBeenCalled(); // Exits immediately due to expiration check
+  });
+
+  it('preserves definitive TX_EXPIRED after an ambiguous guarded submission', async () => {
+    const tx = buildDummyTransaction(1);
+    const txHash = tx.hash().toString('hex');
+    submitSpy.mockRejectedValue({ response: { status: 503 }, message: 'Service Unavailable' });
+
+    await expect(
+      submitWithGuard(tx, { maxPollAttempts: 1, pollIntervalMs: 0 })
+    ).rejects.toMatchObject({
+      code: 'TX_EXPIRED',
+      transactionHash: txHash,
+      retryable: false,
+    });
+
+    expect(submitSpy).toHaveBeenCalledTimes(1);
+    expect(mockCall).not.toHaveBeenCalled();
   });
 
   it('should throw TX_STATUS_UNKNOWN if polling attempts are exceeded without finding transaction', async () => {

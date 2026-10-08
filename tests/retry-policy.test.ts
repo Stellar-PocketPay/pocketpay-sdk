@@ -367,6 +367,23 @@ describe('withRetryPolicy', () => {
     expect(mockCall).toHaveBeenCalledTimes(1);
   });
 
+  it('polls a wrapped connection failure rather than re-submitting a payment', async () => {
+    const tx = buildSignedTx();
+    const txHash = tx.hash().toString('hex');
+    const ledgerRecord = { hash: txHash, ledger: 4321 };
+    submitSpy.mockRejectedValue(
+      makePocketPayError('NET_UNREACHABLE', 'Connection dropped', true, undefined, txHash),
+    );
+    mockCall.mockResolvedValue(ledgerRecord);
+
+    const result = await withRetryPolicy(tx, {
+      maxAttempts: 3, initialBackoffMs: 1, jitter: false,
+    });
+    expect(result).toEqual(ledgerRecord);
+    expect(submitSpy).toHaveBeenCalledTimes(1);
+    expect(mockCall).toHaveBeenCalledTimes(1);
+  });
+
   // ── Retries exhausted ─────────────────────────────────────────────────────
 
   it('exhausts retries and reports retryable_failure when transient error persists', async () => {

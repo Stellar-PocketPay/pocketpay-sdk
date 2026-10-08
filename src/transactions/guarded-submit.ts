@@ -11,7 +11,7 @@ import type * as StellarSDK from '@stellar/stellar-sdk';
 import { getHorizonServer, resolveConfig } from '../config';
 import { classifySubmitError } from '../errors';
 import { pollTransactionStatus, withTimeout } from '../network';
-import type { SDKConfig } from '../types';
+import { PocketPayError, type SDKConfig } from '../types';
 
 /** Any signed envelope the SDK can submit. */
 export type SubmittableTransaction =
@@ -69,11 +69,14 @@ export async function submitWithGuard(
     if (classified.code === 'TX_STATUS_UNKNOWN') {
       try {
         return await pollTransactionStatus(transaction, options, config);
-      } catch {
-        // Polling could not settle it either. Surface the original
-        // classification rather than the polling error: it carries the timeout
-        // stage metadata consumers already depend on, and the meaning is
-        // unchanged — the outcome is still unknown, not failed.
+      } catch (pollError) {
+        // Expiry is definitive: the original envelope cannot settle after
+        // maxTime. Preserve that outcome so callers may rebuild safely.
+        if (pollError instanceof PocketPayError && pollError.code === 'TX_EXPIRED') {
+          throw pollError;
+        }
+        // An unresolved or failed lookup does not prove rejection. Keep the
+        // original unknown-outcome classification and stage metadata.
         throw classified;
       }
     }

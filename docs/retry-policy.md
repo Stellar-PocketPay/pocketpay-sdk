@@ -8,9 +8,9 @@ This guide explains how to retry failed or uncertain transaction submissions wit
 
 When submitting a signed transaction to Stellar, the request can fail in three fundamentally different ways:
 
-1. **Transient network error** — the request never reached Horizon (rate-limit, brief outage). The transaction has *not* been processed. Resubmitting the same envelope is safe.
+1. **Definite pre-processing rejection** — Horizon explicitly rate-limited the request (429) without processing it. The same signed envelope can be retried after backoff.
 2. **Definitive rejection** — Horizon received the transaction and rejected it (`tx_bad_seq`, `tx_insufficient_balance`, etc.). Resubmitting the same envelope will always fail with the same result. You must build a new transaction.
-3. **Unknown outcome** — a gateway timeout (HTTP 504) or network drop occurred *while* Horizon was processing the transaction. It may have been committed to a ledger already. Resubmitting without checking first risks a **duplicate payment**.
+3. **Unknown outcome** — a request timeout, HTTP 408 or 5xx (including 503), or connection drop occurred around submission. Horizon may already have accepted the envelope. **Poll by transaction hash first; do not treat a 503 as a definite rejection or a direct retry signal.**
 
 The SDK represents these three cases as a discriminated union called `SubmissionOutcome`.
 
@@ -25,9 +25,9 @@ import type { SubmissionOutcome } from '@axionvera/pocketpay-sdk';
 | `kind` | Meaning | Safe to resubmit same envelope? |
 |---|---|---|
 | `"success"` | Transaction confirmed on-chain. | N/A |
-| `"retryable_failure"` | Transient error (429, 503…). Same envelope can be submitted again. | **Yes** |
+| `"retryable_failure"` | Explicit pre-processing rate limit (429). Same signed envelope can be sent again after backoff. | **Yes** |
 | `"non_retryable_failure"` | Definitive rejection or expiry. Build a new transaction. | **No** |
-| `"unknown_status"` | Timeout/network drop. Must poll Horizon before deciding. | **No — poll first** |
+| `"unknown_status"` | Timeout, network drop, or HTTP 408/5xx around submission. Must poll Horizon before deciding. | **No — poll first** |
 
 ### Checking outcomes
 

@@ -16,7 +16,7 @@ import {
   redactError,
   isRetryableCode,
 } from '../src/errors';
-import { classifySubmitError } from '../src/errors';
+import { classifySubmitError, classifySubmissionOutcome } from '../src/errors';
 import { PocketPayError } from '../src/types';
 
 // Build a realistic Stellar-secret-shaped string at runtime so no static
@@ -112,6 +112,74 @@ describe('classifySubmitError taxonomy wiring', () => {
     const err = classifySubmitError({ code: 'ETIMEDOUT' }, 'abc');
     expect(err.code).toBe(ErrorCode.TX_STATUS_UNKNOWN);
     expect(err.category).toBe(ErrorCategory.Transaction);
+  });
+
+  it('treats ambiguous HTTP responses after submission as unknown, not safe to retry', () => {
+    for (const status of [408, 500, 502, 503, 504]) {
+      const classified = classifySubmitError({ response: { status } }, 'tx-hash');
+      expect(classified.code, String(status)).toBe(ErrorCode.TX_STATUS_UNKNOWN);
+      expect(classified.retryable, String(status)).toBe(false);
+      expect(classified.transactionHash, String(status)).toBe('tx-hash');
+      expect(classifySubmissionOutcome(classified).kind, String(status)).toBe('unknown_status');
+    }
+  });
+
+  it('requires hash polling after wrapped 5xx or interrupted fetch, without changing 429', () => {
+    const wrapped = new PocketPayError(
+      'Service unavailable',
+      ErrorCode.NET_UNREACHABLE,
+      { statusCode: 503 },
+      'wrapped-hash',
+      true,
+    );
+    const unknown = classifySubmitError(wrapped);
+    expect(unknown.code).toBe(ErrorCode.TX_STATUS_UNKNOWN);
+    expect(unknown.transactionHash).toBe('wrapped-hash');
+    expect(unknown.retryable).toBe(false);
+    expect(classifySubmissionOutcome(unknown).kind).toBe('unknown_status');
+
+    const interrupted = [
+      { name: 'AbortError', message: 'The request was aborted' },
+      { message: 'fetch failed', cause: { code: 'UND_ERR_SOCKET' } },
+      { code: 'EPIPE' },
+      { message: 'Horizon submission timed out' },
+    ];
+    for (const raw of interrupted) {
+      const classified = classifySubmitError(raw, 'submitted-hash');
+      expect(classified.code).toBe(ErrorCode.TX_STATUS_UNKNOWN);
+      expect(classified.transactionHash).toBe('submitted-hash');
+      expect(classified.retryable).toBe(false);
+    }
+
+    const limited = new PocketPayError(
+      'Rate limited',
+      ErrorCode.NET_RATE_LIMITED,
+      { statusCode: 429 },
+      'limited-hash',
+      true,
+    );
+    expect(classifySubmitError(limited)).toBe(limited);
+  });
+
+  it('treats wrapped transport failure and cause-less fetch failure as unknown after submit', () => {
+    for (const code of [ErrorCode.NET_UNREACHABLE, ErrorCode.NET_TIMEOUT, ErrorCode.REQUEST_TIMEOUT]) {
+      const wrapped = new PocketPayError(
+        'Unacknowledged network failure', code, { statusCode: undefined }, undefined, true,
+      );
+      const classified = classifySubmitError(wrapped, 'known-tx-hash');
+      expect(classified.code, code).toBe(ErrorCode.TX_STATUS_UNKNOWN);
+      expect(classified.transactionHash, code).toBe('known-tx-hash');
+      expect(classified.retryable, code).toBe(false);
+    }
+    const bareFetch = classifySubmitError(new TypeError('fetch failed'), 'known-tx-hash');
+    expect(bareFetch.code).toBe(ErrorCode.TX_STATUS_UNKNOWN);
+    expect(classifySubmissionOutcome(bareFetch).kind).toBe('unknown_status');
+
+    // A definite HTTP 404 wrapped as NET_HTTP is not an uncertain 5xx.
+    const definitive = new PocketPayError(
+      'Not found', ErrorCode.NET_HTTP, { statusCode: 404 }, undefined, false,
+    );
+    expect(classifySubmitError(definitive)).toBe(definitive);
   });
 
   it('redacts secrets leaking from raw submission errors', () => {

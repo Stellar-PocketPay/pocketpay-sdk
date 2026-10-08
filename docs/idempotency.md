@@ -25,7 +25,7 @@ graph TD
     A[Build & Sign Transaction] --> B[Calculate Transaction Hash]
     B --> C[Submit to Horizon]
     C -->|Success| D[Return Successful PaymentResult]
-    C -->|Transient Timeout / HTTP 504| E[Classify Error: TX_STATUS_UNKNOWN]
+    C -->|Timeout / HTTP 408 or 5xx| E[Classify Error: TX_STATUS_UNKNOWN]
     E --> F[Poll Horizon by Hash]
     F -->|Found in Ledger| G[Return Successful PaymentResult]
     F -->|Not Found & Within maxTime Bounds| H[Wait & Poll Again]
@@ -39,7 +39,7 @@ Every submission failure is analyzed and categorized via `classifySubmitError`. 
 *   `transactionHash`: The unique SHA-256 hash of the submitted transaction envelope.
 *   `retryable`: A boolean flag indicating if it is safe to submit the exact same transaction envelope again without checking status (e.g., on rate limits).
 *   `code`: Custom error codes representing the failure mode:
-    *   `TX_STATUS_UNKNOWN`: The status is unknown due to a gateway timeout. **Do not retry blindly.**
+    *   `TX_STATUS_UNKNOWN`: The status is unknown after a timeout, HTTP 408/5xx, or network interruption during submission. **Do not retry blindly.**
     *   `PAYMENT_FAILED`: The transaction was rejected on-chain (e.g., `tx_bad_auth`, `tx_insufficient_balance`). Non-retryable.
 
 ### 2. Timebounds Check
