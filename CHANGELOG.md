@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `checkTransactionReadiness()` (issue #441): a typed pre-signing readiness check for payments covering source, destination (format, muxed, self-payment, existence), amount, asset trustlines, memo (including SEP-29 memo-required), network passphrase, fee, and balance against the minimum reserve. Returns `TransactionReadiness` with typed blockers and warnings; signing and submission paths are unchanged. See `docs/transaction-readiness.md`.
 - Opt-in SDK diagnostics (`src/diagnostics/`): redacted lifecycle hooks, `buildDiagnosticsReport`, and support guide (`docs/diagnostics.md`) for configuration, network, transaction, wallet, and vault observability without leaking secrets
 - Added a signer capability architecture on top of the account abstraction layer: `AccountAbstraction` is now the discriminated union `ReadOnlyAccount | SigningAccount`, with `canSignTransaction()` as an explicit type-guard capability check.
 - Added `ExternalSignerAdapter`, a typed extension point for future hardware/mobile/browser signers (contract only — no concrete adapter ships).

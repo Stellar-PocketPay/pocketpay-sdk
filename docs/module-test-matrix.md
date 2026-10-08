@@ -89,9 +89,10 @@ For every public helper that validates input or talks to the network, cover at l
 | Preflight validation | R | O | R | — |
 | Trustline / destination checks | R | S | R | O |
 | Preview / receipts | S | S | S | — |
+| Transaction readiness (`checkTransactionReadiness`) | R | S | R | — |
 | Submission / Horizon mapping | R | R | R | O |
 
-**Primary tests today:** `tests/payments.test.ts`, `tests/payments-error-paths.test.ts`, `tests/payments-validation.test.ts`, `tests/payments-preview.test.ts`, `tests/trustline.test.ts`, `tests/destination-validation.test.ts`, `tests/payment-receipt.test.ts`, `tests/memo-validation.test.ts`
+**Primary tests today:** `tests/payments.test.ts`, `tests/payments-error-paths.test.ts`, `tests/payments-validation.test.ts`, `tests/payments-preview.test.ts`, `tests/trustline.test.ts`, `tests/destination-validation.test.ts`, `tests/payment-receipt.test.ts`, `tests/memo-validation.test.ts`, `tests/transaction-readiness.test.ts`
 
 **Must cover when changing payments:**
 

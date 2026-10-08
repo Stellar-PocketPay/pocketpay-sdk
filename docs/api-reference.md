@@ -113,6 +113,26 @@ console.log(`Network: ${preview.network}`);
 console.log(`Estimated Fee: ${preview.estimatedFee} stroops`);
 ```
 
+### checkTransactionReadiness
+
+Checks whether a payment is ready to sign, without building, signing or submitting anything (issue #441). Takes the source **public** key. Returns a typed `TransactionReadiness` with `ready`, every blocker and warning (each with a stable `code`), and the status of each check. Never throws for bad input or Horizon failures; those are blockers. See [Transaction readiness](./transaction-readiness.md) for every code and the limitations.
+
+```ts
+import { checkTransactionReadiness } from 'stellar-pocketpay-sdk';
+
+const readiness = await checkTransactionReadiness({
+  sourceAccount: wallet.publicKey,
+  destination,
+  amount: '50',
+  asset: { code: 'USDC', issuer: usdcIssuer },
+  memo: 'Invoice #42',
+});
+
+if (!readiness.ready) {
+  console.log(readiness.blockers.map((b) => `${b.code}: ${b.message}`));
+}
+```
+
 ### validateSendXLMParams
 
 Non-throwing input validation for `sendXLM`. Runs the same preflight checks `sendXLM` performs internally (secret key format, destination key format, amount, memo, self-payment) and returns a structured result rather than throwing on the first failure. Pure: no Horizon calls, no signing, no transaction submission.

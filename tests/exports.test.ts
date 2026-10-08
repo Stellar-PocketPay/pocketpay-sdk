@@ -29,7 +29,7 @@ wallet: [
 'fundTestnetAccount',
 'getBalanceOrUnfunded',
 ],
-payments: ['sendXLM'],
+payments: ['sendXLM', 'checkTransactionReadiness', 'READINESS_CHECK_ORDER'],
 transactions: [
 'getTransactions',
 'getPayments',

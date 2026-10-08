@@ -172,6 +172,7 @@ export {
   sendAsset,
   safeSendAsset,
   previewPayment,
+  previewPaymentWithReadiness,
   validateAssetSpec,
   checkDestinationTrustline,
   safeCheckDestinationTrustline,
@@ -194,6 +195,23 @@ export type {
 } from './payments';
 
 export type { PaymentReceiptOptions } from './payments';
+
+// ─── Transaction readiness before signing (issue #441) ──────────────────────
+export { checkTransactionReadiness, READINESS_CHECK_ORDER } from './payments';
+
+export type {
+  TransactionReadiness,
+  TransactionReadinessParams,
+  TransactionReadinessCheck,
+  TransactionReadinessCheckStatus,
+  TransactionReadinessBlocker,
+  TransactionReadinessBlockerCode,
+  TransactionReadinessWarning,
+  TransactionReadinessWarningCode,
+  TransactionReadinessField,
+  TransactionReadinessBalance,
+  PaymentReadinessPreview,
+} from './payments';
 
 export type {
   PaymentReceipt,

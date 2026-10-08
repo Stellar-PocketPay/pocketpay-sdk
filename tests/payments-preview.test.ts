@@ -1,7 +1,66 @@
-import { describe, it, expect } from 'vitest';
-import { previewPayment, createWallet, PocketPayError } from '../src';
+import { describe, it, expect, vi } from 'vitest';
+import { previewPayment, previewPaymentWithReadiness, createWallet, PocketPayError } from '../src';
+
+const { checkTransactionReadiness } = vi.hoisted(() => ({
+  checkTransactionReadiness: vi.fn(),
+}));
+
+vi.mock('../src/payments/readiness', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/payments/readiness')>();
+  return { ...actual, checkTransactionReadiness };
+});
 
 describe('Payment Preview Helper', () => {
+  it('composes the preview with the shared readiness validator', async () => {
+    const sender = createWallet();
+    const receiver = createWallet();
+    const readiness = {
+      ready: true,
+      blockers: [],
+      warnings: [],
+      checks: {
+        source: 'passed',
+        destination: 'passed',
+        amount: 'passed',
+        asset: 'passed',
+        memo: 'passed',
+        network: 'passed',
+        fee: 'passed',
+        balance: 'passed',
+      },
+      network: 'testnet',
+      fee: '100',
+      checkedAt: '2026-10-06T00:00:00.000Z',
+    };
+    checkTransactionReadiness.mockResolvedValueOnce(readiness);
+
+    const result = await previewPaymentWithReadiness({
+      sourceAccount: sender.publicKey,
+      destination: receiver.publicKey,
+      amount: '10.5',
+      memo: 'Test preview',
+    });
+
+    expect(result.preview).toMatchObject({
+      sourceAccount: sender.publicKey,
+      destination: receiver.publicKey,
+      amount: '10.5',
+      estimatedFee: '100',
+    });
+    expect(result.readiness).toBe(readiness);
+    expect(checkTransactionReadiness).toHaveBeenCalledWith(
+      {
+        sourceAccount: sender.publicKey,
+        destination: receiver.publicKey,
+        amount: '10.5',
+        asset: { code: 'XLM' },
+        memo: 'Test preview',
+        fee: '100',
+      },
+      undefined,
+    );
+  });
+
   it('should preview a native XLM payment correctly', async () => {
     const sender = createWallet();
     const receiver = createWallet();
