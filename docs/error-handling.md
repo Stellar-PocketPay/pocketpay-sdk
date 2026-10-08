@@ -83,7 +83,7 @@ These errors are related to Smart Contract operations on the Soroban network.
 Always import `PocketPayError` to verify if a caught exception belongs to the SDK.
 
 ```typescript
-import { sendXLM, PocketPayError } from '@axionvera/pocketpay-sdk';
+import { sendXLM, PocketPayError, redactError } from '@axionvera/pocketpay-sdk';
 
 async function executePayment() {
   try {
@@ -96,9 +96,10 @@ async function executePayment() {
     console.log('Payment successful! Hash:', result.hash);
   } catch (error) {
     if (error instanceof PocketPayError) {
-      console.error(`SDK Error [${error.code}]: ${error.message}`);
+      const safe = redactError(error);
+      console.error(`SDK Error [${safe.code}]: ${safe.message}`);
     } else {
-      console.error('Unknown application error:', error);
+      console.error('Unknown application error:', redactError(error).message);
     }
   }
 }
@@ -135,7 +136,7 @@ async function displayBalance(publicKey: string) {
 If the error was caused by a lower-level HTTP client or library failure, inspect `error.cause`.
 
 ```typescript
-import { fundTestnetAccount, PocketPayError } from '@axionvera/pocketpay-sdk';
+import { fundTestnetAccount, PocketPayError, redactError } from '@axionvera/pocketpay-sdk';
 
 async function fundAccount(publicKey: string) {
   try {
@@ -146,7 +147,7 @@ async function fundAccount(publicKey: string) {
         console.error(`Friendbot failed with status ${error.statusCode}`);
         // Read raw response details from the cause if necessary
         if (error.cause) {
-          console.error('Underlying HTTP details:', error.cause.message);
+          console.error('Underlying HTTP details:', redactError(error.cause).message);
         }
       }
     }
@@ -157,6 +158,13 @@ async function fundAccount(publicKey: string) {
 ---
 
 ## Safe User-Facing Messages
+
+Always pass caught values through `redactError(error)` before logging or
+rendering diagnostic fields. JavaScript catch values need not be Error objects:
+the SDK also redacts raw thrown strings, custom Error names and malformed
+transaction-hash metadata. A valid 64-character hexadecimal Stellar transaction
+hash remains available for reconciliation. Show `safeMessage` to customers and
+never log a raw `cause.message` or stringify an unknown thrown value directly.
 
 When building customer-facing interfaces, translate machine-readable SDK error codes into clear, friendly guidance. Avoid displaying raw stack traces or complex developer messages directly to the end user.
 

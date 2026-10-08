@@ -94,6 +94,19 @@ export function describeError(code: string): ErrorDescription {
  * `safeMessage`, the stable `code`, `category`, and `retryable` so consumers can
  * branch without touching raw `message`. Raw `message`/`cause` are redacted.
  */
+/**
+ * Reads untrusted Error fields without assuming runtime TypeScript annotations.
+ * Malformed getters, proxies and nonstring data must never interrupt logging.
+ */
+function safeDiagnosticText(read: () => unknown, fallback: string): string {
+  try {
+    const value = read();
+    return typeof value === 'string' ? redactSensitive(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function redactError(error: unknown): {
   name: string;
   code: string;
@@ -104,29 +117,73 @@ export function redactError(error: unknown): {
   statusCode?: number;
   transactionHash?: string;
 } {
-  if (error instanceof PocketPayError) {
-    const desc = describeError(error.code);
+  let typed = false;
+  try {
+    typed = error instanceof PocketPayError;
+  } catch {
+    // Malformed JavaScript Proxy prototype traps must not break safe logging.
+  }
+
+  if (typed) {
+    const pocketError = error as PocketPayError;
+    const candidateCode = safeDiagnosticText(() => pocketError.code, '');
+    const code = isKnownErrorCode(candidateCode)
+      ? candidateCode
+      : ErrorCode.SDK_INTERNAL;
+    const desc = describeError(code);
+
+    let statusCode: number | undefined;
+    try {
+      const rawStatus = pocketError.statusCode;
+      if (typeof rawStatus === 'number' && Number.isFinite(rawStatus)) {
+        statusCode = rawStatus;
+      }
+    } catch {
+      // An unreadable numeric field is not trusted log metadata.
+    }
+
+    let transactionHash: string | undefined;
+    try {
+      const rawHash = pocketError.transactionHash;
+      if (typeof rawHash === 'string') {
+        transactionHash = /^[0-9a-f]{64}$/i.test(rawHash)
+          ? rawHash
+          : redactSensitive(rawHash);
+      }
+    } catch {
+      // The hash is optional; don't invoke an unsafe accessor again.
+    }
+
     return {
-      name: error.name,
-      code: error.code,
+      name: safeDiagnosticText(() => pocketError.name, 'PocketPayError'),
+      code,
       category: desc.category,
       retryable: desc.retryable,
       safeMessage: desc.safeMessage,
-      message: redactSensitive(error.message),
-      statusCode: error.statusCode,
-      transactionHash: error.transactionHash,
+      message: safeDiagnosticText(() => pocketError.message, 'An unexpected error occurred.'),
+      statusCode,
+      transactionHash,
     };
   }
 
-  // Non-PocketPayError: still redact whatever text we have.
-  const message = error instanceof Error ? redactSensitive(error.message) : String(error);
+  let isNativeError = false;
+  try {
+    isNativeError = error instanceof Error;
+  } catch {
+    // A throwing getPrototypeOf trap does not make the error loggable.
+  }
   return {
-    name: error instanceof Error ? error.name : 'Error',
+    name: isNativeError
+      ? safeDiagnosticText(() => (error as Error).name, 'Error')
+      : 'Error',
     code: ErrorCode.SDK_INTERNAL,
     category: ErrorCategory.SDK,
     retryable: false,
     safeMessage: 'An unexpected error occurred.',
-    message,
+    message: safeDiagnosticText(
+      () => isNativeError ? (error as Error).message : String(error),
+      'Unable to format thrown error value.',
+    ),
   };
 }
 

@@ -97,6 +97,71 @@ describe('redaction', () => {
     expect(safe.message).not.toContain(fakeKey);
     expect(safe.category).toBe(ErrorCategory.SDK);
   });
+
+  it('never leaks malformed typed metadata or evaluates throwing diagnostic getters', () => {
+    const secret = makeFakeKey();
+    const malformed = new PocketPayError('Safe error', ErrorCode.SDK_INTERNAL);
+    Object.defineProperty(malformed, 'statusCode', {
+      value: { diagnostic: secret },
+      configurable: true,
+    });
+    Object.defineProperty(malformed, 'transactionHash', {
+      value: { diagnostic: secret },
+      configurable: true,
+    });
+    for (const field of ['name', 'message', 'code']) {
+      Object.defineProperty(malformed, field, {
+        configurable: true,
+        get() { throw new Error(`Unsafe diagnostic ${secret}`); },
+      });
+    }
+
+    const safe = redactError(malformed);
+    expect(safe).toMatchObject({
+      name: 'PocketPayError',
+      code: ErrorCode.SDK_INTERNAL,
+      message: 'An unexpected error occurred.',
+      safeMessage: expect.any(String),
+    });
+    expect(safe.statusCode).toBeUndefined();
+    expect(safe.transactionHash).toBeUndefined();
+    expect(JSON.stringify(safe)).not.toContain(secret);
+
+    const plain = new Error('Benign');
+    Object.defineProperty(plain, 'name', {
+      get() { throw new Error(secret); },
+    });
+    expect(redactError(plain)).toMatchObject({
+      name: 'Error', message: 'Benign',
+    });
+  });
+
+  it('redacts raw thrown strings and custom metadata but preserves real transaction hashes', () => {
+    const fakeKey = makeFakeKey();
+    expect(redactError(`failure: ${fakeKey}`).message).not.toContain(fakeKey);
+
+    // Public error-code fields must not leak arbitrary values passed to the constructor.
+    const unrecognizedCode = new PocketPayError('failed', `UNREGISTERED_${fakeKey}`);
+    const redactedCode = redactError(unrecognizedCode);
+    expect(redactedCode.code).toBe(ErrorCode.SDK_INTERNAL);
+    expect(JSON.stringify(redactedCode)).not.toContain(fakeKey);
+
+    const unexpected = new Error('failed');
+    unexpected.name = `SDKError_${fakeKey}`;
+    expect(redactError(unexpected).name).not.toContain(fakeKey);
+
+    const untrustedHash = new PocketPayError('failed', ErrorCode.SDK_INTERNAL,
+      undefined, undefined, fakeKey);
+    expect(redactError(untrustedHash).transactionHash).not.toContain(fakeKey);
+
+    const validHash = 'a'.repeat(64);
+    const valid = new PocketPayError('failed', ErrorCode.SDK_INTERNAL,
+      undefined, undefined, validHash);
+    expect(redactError(valid).transactionHash).toBe(validHash);
+
+    const unprintable = { toString: () => { throw new Error('toString failed'); } };
+    expect(redactError(unprintable).message).toBe('Unable to format thrown error value.');
+  });
 });
 
 describe('classifySubmitError taxonomy wiring', () => {
