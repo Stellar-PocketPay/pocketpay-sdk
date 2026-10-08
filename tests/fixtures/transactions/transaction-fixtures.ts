@@ -53,6 +53,15 @@ export const transactionFixtures = {
     .withMemo('Payment for services')
     .withStatus('completed')
     .build(),
+  /** Submission acknowledged by no conclusive ledger result; safe to poll, not blindly resend. */
+  unknown: new TransactionBuilder()
+    .withHash('0x1234567890abcdef1234567890abcdef12345682')
+    .withFrom('GABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')
+    .withTo('GXYZ1234567890ABCDEFGHIJKLMNOPQRSTUVW')
+    .withAmount('100.00')
+    .withAsset('XLM')
+    .withStatus('unknown')
+    .build(),
 };
 
 export type TransactionFixtureType = keyof typeof transactionFixtures;

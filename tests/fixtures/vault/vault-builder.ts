@@ -1,4 +1,4 @@
-import { FixtureBuilder } from '../builders/fixture-builder';
+import { FixtureBuilder, cloneFixture } from '../builders/fixture-builder';
 
 export interface VaultFixture {
   userId: string;
@@ -20,8 +20,8 @@ export class VaultBuilder extends FixtureBuilder<VaultFixture> {
       amount: '0.00',
       action: 'deposit',
       status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2024-01-15T10:30:00.000Z'),
+      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
     };
   }
 
@@ -61,7 +61,7 @@ export class VaultBuilder extends FixtureBuilder<VaultFixture> {
   }
 
   build(): VaultFixture {
-    return {
+    return cloneFixture({
       userId: this.data.userId!,
       amount: this.data.amount!,
       action: this.data.action!,
@@ -71,7 +71,7 @@ export class VaultBuilder extends FixtureBuilder<VaultFixture> {
       error: this.data.error,
       createdAt: this.data.createdAt!,
       updatedAt: this.data.updatedAt!,
-    };
+    });
   }
 
   validate(): boolean {

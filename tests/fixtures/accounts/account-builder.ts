@@ -1,4 +1,4 @@
-import { FixtureBuilder } from '../builders/fixture-builder';
+import { FixtureBuilder, cloneFixture } from '../builders/fixture-builder';
 
 export interface AccountFixture {
   id: string;
@@ -21,8 +21,8 @@ export class AccountBuilder extends FixtureBuilder<AccountFixture> {
       exists: true,
       frozen: false,
       pendingTransaction: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2024-01-15T10:30:00.000Z'),
+      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
     };
   }
 
@@ -57,7 +57,7 @@ export class AccountBuilder extends FixtureBuilder<AccountFixture> {
   }
 
   build(): AccountFixture {
-    return {
+    return cloneFixture({
       id: this.data.id!,
       balance: this.data.balance!,
       sequence: this.data.sequence!,
@@ -66,7 +66,7 @@ export class AccountBuilder extends FixtureBuilder<AccountFixture> {
       pendingTransaction: this.data.pendingTransaction!,
       createdAt: this.data.createdAt!,
       updatedAt: this.data.updatedAt!,
-    };
+    });
   }
 
   validate(): boolean {

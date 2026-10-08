@@ -68,3 +68,14 @@ const unknown = createSubmissionResultFixture('unknown');
 
 ## Best Practices
 When writing tests for your PocketPay integration, use `vi.mock` or `jest.mock` on the network submission and preparation layers, and use these fixtures as the resolved return values. This effectively stubs out Horizon, ensuring your business logic operates deterministically against valid transaction payloads.
+
+## Test-only cross-domain scenario builders (issue #318)
+
+The existing public transaction-envelope generators above remain unchanged.
+For SDK integration tests, the **test-only** framework under
+[`tests/fixtures/README.md`](../tests/fixtures/README.md) provides fixed-clock
+account/payment/transaction/network/Soroban/vault fixtures and correlated
+`success`, `failure`, `timeout`, `unsupported` and `unknown` scenarios.
+It also supplies `createFetchFromFixture` to exercise the production
+`NetworkClient` without contacting Horizon. Use fresh builders/scenarios
+rather than mutating exported singletons; mock cleanup stays local to tests.

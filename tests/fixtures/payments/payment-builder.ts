@@ -1,4 +1,4 @@
-import { FixtureBuilder } from '../builders/fixture-builder';
+import { FixtureBuilder, cloneFixture } from '../builders/fixture-builder';
 
 export interface PaymentFixture {
   from: string;
@@ -23,8 +23,8 @@ export class PaymentBuilder extends FixtureBuilder<PaymentFixture> {
       amount: '0.00',
       asset: 'XLM',
       status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2024-01-15T10:30:00.000Z'),
+      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
     };
   }
 
@@ -74,7 +74,7 @@ export class PaymentBuilder extends FixtureBuilder<PaymentFixture> {
   }
 
   build(): PaymentFixture {
-    return {
+    return cloneFixture({
       from: this.data.from!,
       to: this.data.to!,
       amount: this.data.amount!,
@@ -86,7 +86,7 @@ export class PaymentBuilder extends FixtureBuilder<PaymentFixture> {
       error: this.data.error,
       createdAt: this.data.createdAt!,
       updatedAt: this.data.updatedAt!,
-    };
+    });
   }
 
   validate(): boolean {

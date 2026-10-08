@@ -1,4 +1,4 @@
-import { FixtureBuilder } from '../builders/fixture-builder';
+import { FixtureBuilder, cloneFixture } from '../builders/fixture-builder';
 
 export interface TransactionFixture {
   hash: string;
@@ -8,7 +8,7 @@ export interface TransactionFixture {
   asset: string;
   assetIssuer?: string;
   memo?: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'unknown';
   fee?: string;
   error?: string;
   createdAt: Date;
@@ -25,8 +25,8 @@ export class TransactionBuilder extends FixtureBuilder<TransactionFixture> {
       amount: '0.00',
       asset: 'XLM',
       status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2024-01-15T10:30:00.000Z'),
+      updatedAt: new Date('2024-01-15T10:30:00.000Z'),
     };
   }
 
@@ -65,7 +65,7 @@ export class TransactionBuilder extends FixtureBuilder<TransactionFixture> {
     return this;
   }
 
-  withStatus(status: 'pending' | 'completed' | 'failed'): this {
+  withStatus(status: 'pending' | 'completed' | 'failed' | 'unknown'): this {
     this.data.status = status;
     return this;
   }
@@ -81,7 +81,7 @@ export class TransactionBuilder extends FixtureBuilder<TransactionFixture> {
   }
 
   build(): TransactionFixture {
-    return {
+    return cloneFixture({
       hash: this.data.hash!,
       from: this.data.from!,
       to: this.data.to!,
@@ -94,7 +94,7 @@ export class TransactionBuilder extends FixtureBuilder<TransactionFixture> {
       error: this.data.error,
       createdAt: this.data.createdAt!,
       updatedAt: this.data.updatedAt!,
-    };
+    });
   }
 
   validate(): boolean {

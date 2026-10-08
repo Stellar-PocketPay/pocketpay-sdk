@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { createFetchFromFixture, NetworkBuilder, networkFixtures } from './fixtures';
 import { NetworkClient, checkEndpointReachability } from '../src/network';
 import { PocketPayError } from '../src/types';
 import { ErrorCode } from '../src/errors';
@@ -44,13 +45,15 @@ function connectionRefused(): Error {
 
 describe('NetworkClient', () => {
   it('returns parsed JSON on a successful GET', async () => {
-    mockFetchOk({ hello: 'world' });
+    vi.stubGlobal('fetch', vi.fn(createFetchFromFixture(
+      new NetworkBuilder().withData({ hello: 'world' }).build(),
+    )));
     const client = new NetworkClient({ baseUrl: 'https://example.test' });
     await expect(client.get('/ping')).resolves.toEqual({ hello: 'world' });
   });
 
   it('classifies HTTP 429 as the typed NET_RATE_LIMITED code', async () => {
-    mockFetchStatus(429, { message: 'slow down' });
+    vi.stubGlobal('fetch', vi.fn(createFetchFromFixture(networkFixtures.rateLimited)));
     const client = new NetworkClient({ baseUrl: 'https://example.test' });
 
     await expect(client.get('/ping')).rejects.toMatchObject({
@@ -61,7 +64,7 @@ describe('NetworkClient', () => {
   });
 
   it('classifies HTTP 503 as the typed NET_UNREACHABLE code', async () => {
-    mockFetchStatus(503, 'Service Unavailable');
+    vi.stubGlobal('fetch', vi.fn(createFetchFromFixture(networkFixtures.serverError)));
     const client = new NetworkClient({ baseUrl: 'https://example.test' });
 
     await expect(client.get('/ping')).rejects.toMatchObject({

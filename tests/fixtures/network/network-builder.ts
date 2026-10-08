@@ -1,4 +1,4 @@
-import { FixtureBuilder } from '../builders/fixture-builder';
+import { FixtureBuilder, cloneFixture } from '../builders/fixture-builder';
 
 export interface NetworkFixture {
   status: number;
@@ -25,7 +25,7 @@ export class NetworkBuilder extends FixtureBuilder<NetworkFixture> {
   }
 
   withData(data: any): this {
-    this.data.data = data;
+    this.data.data = cloneFixture(data);
     return this;
   }
 
@@ -35,7 +35,7 @@ export class NetworkBuilder extends FixtureBuilder<NetworkFixture> {
   }
 
   withHeaders(headers: Record<string, string>): this {
-    this.data.headers = headers;
+    this.data.headers = cloneFixture(headers);
     return this;
   }
 
@@ -50,14 +50,14 @@ export class NetworkBuilder extends FixtureBuilder<NetworkFixture> {
   }
 
   build(): NetworkFixture {
-    return {
+    return cloneFixture({
       status: this.data.status!,
       data: this.data.data,
       error: this.data.error,
       headers: this.data.headers,
       timeout: this.data.timeout!,
       latency: this.data.latency!,
-    };
+    });
   }
 
   validate(): boolean {

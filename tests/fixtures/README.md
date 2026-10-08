@@ -1,148 +1,73 @@
-# SDK Fixture Framework
+# Offline, deterministic SDK integration scenarios
 
-## Overview
+These utilities live in `tests/fixtures` and are **test-only**. They are not
+part of the published package API. Their purpose is to exercise real SDK
+callers while controlling the remote Horizon, Soroban and vault boundaries.
 
-The fixture framework provides deterministic, reusable test fixtures for SDK integration tests.
+## Reuse existing domain builders, not clock-driven mocks
 
-## Why Use Fixtures?
+The fixtures export `accountFixtures`, `paymentFixtures`,
+`transactionFixtures`, `networkFixtures`, `sorobanFixtures` and
+`vaultFixtures`, plus the corresponding builders. Four timestamp-bearing
+builders default to the fixed instant `2024-01-15T10:30:00.000Z`.
+`set`, `merge`, `clone`, `reset` and `build` preserve independent copies
+of nested data and dates. `reset()` restores complete constructor defaults.
 
-- **Deterministic**: Same data every time
-- **Reusable**: Share across tests
-- **Type-safe**: Full TypeScript support
-- **Composable**: Build complex fixtures from simple ones
+Do not edit the exported singleton fixture objects. For test isolation,
+build or clone your own fixture, or use `createSdkScenario`, which returns
+new values for each request. Use `builder.set('createdAt', new Date(...))`
+when a particular timestamp is required.
 
-## Available Fixtures
+## Integrated scenarios
 
-### Accounts
-- `valid`: A valid, funded account
-- `empty`: An account with no balance
-- `lowBalance`: An account with a small balance
-- `highBalance`: An account with a large balance
-- `notFound`: An account that does not exist
-- `pending`: An account with a pending transaction
-- `frozen`: A frozen account
+```ts
+import { createSdkScenario } from './fixtures';
 
-### Payments
-- `success`: A successful payment
-- `pending`: A pending payment
-- `failed`: A failed payment
-- `withMemo`: A payment with a memo
-- `usdc`: A USDC payment
+const ready = createSdkScenario('success');
+const declined = createSdkScenario('failure');
+const timedOut = createSdkScenario('timeout');
+const unsupported = createSdkScenario('unsupported');
+const uncertain = createSdkScenario('unknown');
 
-### Transactions
-- `success`: A successful transaction
-- `pending`: A pending transaction
-- `failed`: A failed transaction
-- `withMemo`: A transaction with memo
+expect(uncertain.transaction.status).toBe('unknown');
+expect(timedOut.network.timeout).toBe(true);
+expect(unsupported.soroban.error).toBe('Unsupported feature');
+```
 
-### Network
-- `success`: A successful network response
-- `timeout`: A network timeout
-- `serverError`: A 500 error
-- `notFound`: A 404 error
-- `forbidden`: A 403 error
-- `rateLimited`: A 429 error
+The five names correlate account, payment, transaction, network, Soroban and
+vault mock outcomes. They do **not** assert that all of these states occur
+simultaneously on a live network. An unknown submission is not a failed
+submission and must not be blindly re-sent.
 
-### Soroban
-- `success`: A successful contract call
-- `error`: A contract call with error
-- `timeout`: A contract call timeout
-- `unsupported`: An unsupported feature call
+## Production-facing network tests
 
-### Vault
-- `success`: A successful vault operation
-- `pending`: A pending vault operation
-- `failed`: A failed vault operation
-- `lock`: A lock operation
-- `unlock`: An unlock operation
+```ts
+import { vi, expect } from 'vitest';
+import { NetworkClient } from '../../src/network';
+import { createFetchFromFixture, networkFixtures } from './fixtures';
 
-## Usage Examples
-
-### Basic Usage
-
-```typescript
-import { accountFixtures, paymentFixtures } from '../fixtures';
-
-describe('Account tests', () => {
-  it('should handle valid account', () => {
-    const account = accountFixtures.valid;
-    expect(account.balance).toBe('1000.00');
-  });
-
-  it('should handle empty account', () => {
-    const account = accountFixtures.empty;
-    expect(account.balance).toBe('0.00');
-  });
+vi.stubGlobal('fetch', vi.fn(createFetchFromFixture(networkFixtures.rateLimited)));
+const client = new NetworkClient({ baseUrl: 'https://example.test' });
+await expect(client.get('/ping')).rejects.toMatchObject({
+  statusCode: 429,
+  retryable: true,
 });
-import { AccountBuilder } from '../fixtures/builders';
+vi.unstubAllGlobals();
+```
 
-describe('Custom account tests', () => {
-  it('should create custom account', () => {
-    const account = new AccountBuilder()
-      .withId('GABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')
-      .withBalance('500.00')
-      .withSequence(123456789)
-      .build();
-    
-    expect(account.balance).toBe('500.00');
-  });
-});
-import { accountFixtures, paymentFixtures } from '../fixtures';
+`createFetchFromFixture` creates a **new** response per call, with JSON and
+text readers. `timeout` rejects with `AbortError`, HTTP scenarios resolve
+with the specified status, headers and body. The adapter never fetches a URL;
+installation and cleanup of the mock remain explicit in the calling test.
+This covers transport-classification paths, not a real timed AbortController
+or actual Horizon/RPC calls.
 
-describe('Integration tests', () => {
-  it('should handle full flow', () => {
-    const sender = accountFixtures.valid;
-    const payment = paymentFixtures.success;
-    
-    expect(sender.balance).toBe('1000.00');
-    expect(payment.from).toBe(sender.id);
-  });
-});
-// tests/fixtures/my-domain/my-builder.ts
-export class MyBuilder extends FixtureBuilder<MyFixture> {
-  // Implement builder methods
-}
-// tests/fixtures/my-domain/my-fixtures.ts
-export const myFixtures = {
-  valid: new MyBuilder().build(),
-  error: new MyBuilder().withError('error').build(),
-};
-// tests/fixtures/my-domain/index.ts
-export * from './my-fixtures';
-export * from './my-builder';
-// tests/fixtures/index.ts
-export * from './my-domain';
-const account = await getAccount('G...');
-expect(account.balance).toBeDefined();
-const account = accountFixtures.valid;
-expect(account.balance).toBe('1000.00');
-export class MyBuilder extends FixtureBuilder<MyFixture> {
-  constructor() {
-    super();
-    this.data = {
-      id: 'default_id',
-      name: 'default_name',
-    };
-  }
+## Adding a scenario
 
-  withId(id: string): this {
-    this.data.id = id;
-    return this;
-  }
-
-  // ... other builder methods
-
-  build(): MyFixture {
-    return {
-      id: this.data.id!,
-      name: this.data.name!,
-    };
-  }
-}
-export const myFixtures = {
-  valid: new MyBuilder().build(),
-  error: new MyBuilder().withId('error').build(),
-};
-// tests/fixtures/my-domain/index.ts
-export * from './my-fixtures';
-export * from './my-builder';
+Add a named fixture via an existing builder in its domain file and export it
+through that domain's index. Add it to `createSdkScenario` only when it
+represents a useful cross-boundary state. Choose fixed timestamps, literal
+IDs and self-contained objects. Exercise the real SDK boundary with a mock;
+avoid sleeps, live Testnet, nondeterministic keys and mutation of shared
+singleton fixture objects. Existing focused regressions:
+`tests/fixture-framework.test.ts` and `tests/network-client.test.ts`.

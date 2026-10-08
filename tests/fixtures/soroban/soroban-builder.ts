@@ -1,4 +1,4 @@
-import { FixtureBuilder } from '../builders/fixture-builder';
+import { FixtureBuilder, cloneFixture } from '../builders/fixture-builder';
 
 export interface SorobanFixture {
   contractId: string;
@@ -32,12 +32,12 @@ export class SorobanBuilder extends FixtureBuilder<SorobanFixture> {
   }
 
   withParams(params: any[]): this {
-    this.data.params = params;
+    this.data.params = cloneFixture(params);
     return this;
   }
 
   withResult(result: any): this {
-    this.data.result = result;
+    this.data.result = cloneFixture(result);
     return this;
   }
 
@@ -57,7 +57,7 @@ export class SorobanBuilder extends FixtureBuilder<SorobanFixture> {
   }
 
   build(): SorobanFixture {
-    return {
+    return cloneFixture({
       contractId: this.data.contractId!,
       method: this.data.method!,
       params: this.data.params,
@@ -65,7 +65,7 @@ export class SorobanBuilder extends FixtureBuilder<SorobanFixture> {
       error: this.data.error,
       timeout: this.data.timeout!,
       gasUsed: this.data.gasUsed!,
-    };
+    });
   }
 
   validate(): boolean {
