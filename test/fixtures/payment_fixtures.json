@@ -1,0 +1,32 @@
+{
+  "account_states": {
+    "active_verified": {
+      "account_id": "GDGFOF36O775XJAL4A75G7N6R",
+      "balance": "1500.00",
+      "currency": "USDC",
+      "status": "ACTIVE"
+    },
+    "insufficient_balance": {
+      "account_id": "GC3MUBAR2Z2D27V42N45B",
+      "balance": "2.50",
+      "currency": "USDC",
+      "status": "ACTIVE"
+    }
+  },
+  "payment_intents": {
+    "standard_transfer": {
+      "intent_id": "pi_live_019238127391",
+      "amount": "50.00",
+      "destination": "GBBM...STELLAR",
+      "memo": "PocketPay-Tx-448",
+      "timeout_seconds": 300
+    }
+  },
+  "settlement_responses": {
+    "successful_submission": {
+      "ledger": 52194812,
+      "hash": "3e9b1d683f1e9447d9e4a3821038db4812f9a12c842b10",
+      "status": "SETTLED"
+    }
+  }
+}
